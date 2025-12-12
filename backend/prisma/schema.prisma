@@ -12,3 +12,26 @@ generator client {
 datasource db {
   provider = "postgresql"
 }
+
+model User {
+  id          String      @id @default(cuid())
+  email       String      @unique
+  createdAt   DateTime    @default(now())
+  playlists   Playlist[]
+}
+
+model Playlist {
+  id        String        @id @default(cuid())
+  name      String
+  ownerId   String
+  owner     User          @relation(fields: [ownerId], references: [id])
+  createdAt DateTime      @default(now())
+}
+
+model Track {
+  id        String        @id @default(cuid())
+  ytId      String        @unique
+  title     String
+  artist    String?
+  duration  Int?
+}
