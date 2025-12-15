@@ -1,24 +1,25 @@
-import { Controller, Get, Param } from "@nestjs/common";
+import { Controller, Get, Query, Param } from "@nestjs/common";
+import { YtService } from "./yt.service";
 
-@Controller('yt')
+@Controller("yt")
 export class YtController {
-  @Get('search')
-  search() {
-    return {
-      items: [
-        { id: 'yt_1', title: "God's plan", artist: "Drake" },
-        { id: 'yt_2', title: "Revenge", artist: "XXXTentacion" },
-      ],
-    };
+  constructor(private readonly ytService: YtService) {}
+  
+  @Get("search")
+  async search(@Query("q") q: string) {
+    return this.ytService.search(q);
   }
 
   @Get('details/:id')
-  details(@Param('id') id: string) {
-    return { id, title: `Dummy Title ${id}`, duration: 210 };
+  async details(@Param("id") id: string) {
+    return {
+      id,
+      message: "Details endpoint not implemented yet",
+    }
   } 
 
-  @Get('playlist/my')
+  @Get("playlist/my")
   myPlaylists() {
-    return []
+    return [];
   }
 }
