@@ -2,6 +2,7 @@ import { View, Text, TextInput, FlatList, Pressable } from "react-native";
 import { useState } from "react";
 import api from "../api/client";
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { usePlayerStore } from "../store/player.store";
 
 type Track = {
   videoId: string,
@@ -11,6 +12,8 @@ type Track = {
 };
 
 export default function HomeScreen() {
+  const selectTrack = usePlayerStore((s)=> s.selectTrack);
+
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<Track[]>([]);
 
@@ -51,7 +54,7 @@ export default function HomeScreen() {
         keyExtractor={(item) => item.videoId}
         renderItem={({ item }) => (
           <Pressable
-            onPress= {() => console.log("TAPPED: ", item.videoId)}
+            onPress= {() => selectTrack(item)}
             style= {{ paddingVertical: 12 }}
           >
             <Text style= {{ fontWeight: "600" }}>
