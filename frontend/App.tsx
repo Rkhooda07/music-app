@@ -6,7 +6,9 @@ import SearchScreen from "./src/screens/SearchScreen";
 import LibraryScreen from "./src/screens/LibraryScreen";
 import PlayerScreen from "./src/screens/PlayerScreen";
 
-const Tab = createBottomTabNavigator();
+import { RootTabParamList } from "./src/navigation/types";
+
+const Tab = createBottomTabNavigator<RootTabParamList>();
 
 export default function App() {
   return (

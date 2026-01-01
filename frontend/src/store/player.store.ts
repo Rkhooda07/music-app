@@ -1,10 +1,8 @@
 import { create } from "zustand";
 
 export type Track = {
-  videoId: string,
   title: string,
   channel: string,
-  thumbnail: string
 };
 
 // Shape of player state
