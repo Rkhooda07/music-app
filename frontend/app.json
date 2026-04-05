@@ -13,7 +13,12 @@
     "android": {
       "package": "com.anonymous.frontend",
       "permissions": [
-        "READ_MEDIA_AUDIO"
+        "READ_EXTERNAL_STORAGE",
+        "WRITE_EXTERNAL_STORAGE",
+        "READ_MEDIA_AUDIO",
+        "READ_MEDIA_VIDEO",
+        "READ_MEDIA_IMAGES",
+        "ACCESS_MEDIA_LOCATION"
       ],
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
@@ -34,6 +39,16 @@
     "web": {
       "favicon": "./assets/favicon.png"
     },
+    "plugins": [
+      [
+        "expo-media-library",
+        {
+          "photosPermission": "Allow $(PRODUCT_NAME) to access your music library.",
+          "savePhotosPermission": "Allow $(PRODUCT_NAME) to save music to your device.",
+          "isAccessMediaLocationEnabled": true
+        }
+      ]
+    ],
     "extra": {
       "eas": {
         "projectId": "8638ae9b-3e68-43c6-a135-2d886202a9ac"

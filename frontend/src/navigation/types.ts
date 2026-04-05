@@ -2,5 +2,6 @@ export type RootTabParamList = {
   Home: undefined,
   Search: undefined,
   Player: undefined,
-  Library: undefined
+  Library: undefined,
+  Main: undefined
 };
