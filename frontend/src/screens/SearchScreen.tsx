@@ -58,16 +58,30 @@ export default function SearchScreen() {
 
   const handlePlay = (track: any) => {
     Keyboard.dismiss();
-    const streamUrl = `${BACKEND_URL}/api/music/stream/${track.id}`;
     
-    playTrack({
+    // Map current result to Player's Track type
+    const currentTrackData = {
       id: track.id,
       title: track.title,
       artist: track.artist,
       album: "Global Stream",
       duration: track.duration,
-      uri: streamUrl,
-    });
+      uri: `${BACKEND_URL}/api/music/stream/${track.id}`,
+      thumbnail: track.thumbnail
+    };
+
+    // Map all results so the queue is populated
+    const queue = results.map(item => ({
+      id: item.id,
+      title: item.title,
+      artist: item.artist,
+      album: "Global Stream",
+      duration: item.duration,
+      uri: `${BACKEND_URL}/api/music/stream/${item.id}`,
+      thumbnail: item.thumbnail
+    }));
+    
+    playTrack(currentTrackData, queue);
   };
 
   const formatViews = (views: number) => {
