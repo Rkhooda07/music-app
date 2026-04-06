@@ -8,11 +8,17 @@ const ytDlpPath = path.resolve(__dirname, '../../yt-dlp');
 export const searchYouTube = (query: string): Promise<any[]> => {
   return new Promise((resolve, reject) => {
     logger.info(`Searching YouTube for: ${query}`);
+    // Fast flags for yt-dlp search
     const ytDlp = spawn(ytDlpPath, [
-      `ytsearch5:${query}`,
+      `ytsearch10:${query}`,
       '--dump-json',
       '--no-playlist',
       '--ignore-errors',
+      '--no-warnings',
+      '--no-check-certificates',
+      '--no-call-home',
+      '--no-cache-dir',
+      '--flat-playlist'
     ]);
 
     let output = '';
@@ -36,6 +42,9 @@ export const searchYouTube = (query: string): Promise<any[]> => {
         })
         .filter(Boolean);
 
+      // Sort by view_count in descending order
+      results.sort((a, b) => (b.view_count || 0) - (a.view_count || 0));
+
       const formattedResults = results.map((v) => ({
         id: v.id,
         title: v.title,
@@ -43,6 +52,7 @@ export const searchYouTube = (query: string): Promise<any[]> => {
         duration: v.duration,
         thumbnail: v.thumbnail,
         url: v.webpage_url,
+        viewCount: v.view_count || 0,
       }));
 
       resolve(formattedResults);
@@ -53,11 +63,15 @@ export const searchYouTube = (query: string): Promise<any[]> => {
 export const getAudioStreamUrl = (videoId: string): Promise<string> => {
   return new Promise((resolve, reject) => {
     logger.info(`Extracting audio URL for video ID: ${videoId}`);
+    // Fast flags for direct URL extraction
     const ytDlp = spawn(ytDlpPath, [
-      '-f',
-      'bestaudio',
+      '-f', 'bestaudio[ext=m4a]/bestaudio',
       '-g',
       `https://www.youtube.com/watch?v=${videoId}`,
+      '--no-warnings',
+      '--no-check-certificates',
+      '--no-call-home',
+      '--no-cache-dir'
     ]);
 
     let url = '';

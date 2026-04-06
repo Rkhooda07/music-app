@@ -1,12 +1,11 @@
-import React, { useState } from "react";
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, FlatList, ActivityIndicator, Image } from "react-native";
+import React, { useState, useEffect, useRef } from "react";
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, FlatList, ActivityIndicator, Image, Keyboard } from "react-native";
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { theme } from "../utils/theme";
-import { Search as SearchIcon, Play } from "lucide-react-native";
+import { Search as SearchIcon, Play, X } from "lucide-react-native";
 import axios from "axios";
 import { usePlayerStore } from "../store/player.store";
 
-// Automatically uses your machine's local IP address parsed from Expo for physical device testing
 const BACKEND_URL = "http://192.168.0.107:3000";
 
 export default function SearchScreen() {
@@ -19,64 +18,107 @@ export default function SearchScreen() {
   const playTrack = usePlayerStore(state => state.playTrack);
   const currentTrack = usePlayerStore(state => state.currentTrack);
   const isPlaying = usePlayerStore(state => state.isPlaying);
+  
+  const searchTimeout = useRef<NodeJS.Timeout | null>(null);
+
+  // Auto-search as the user types (Spotify style)
+  useEffect(() => {
+    if (query.trim().length > 2) {
+      if (searchTimeout.current) clearTimeout(searchTimeout.current);
+      searchTimeout.current = setTimeout(() => {
+        handleSearch();
+      }, 600); // 600ms debounce
+    } else if (query.trim().length === 0) {
+      setResults([]);
+    }
+    return () => {
+      if (searchTimeout.current) clearTimeout(searchTimeout.current);
+    };
+  }, [query]);
 
   const handleSearch = async () => {
     if (!query.trim()) return;
     
     setLoading(true);
     setError("");
-    setResults([]);
     
     try {
       const response = await axios.get(`${BACKEND_URL}/api/music/search?q=${encodeURIComponent(query)}`);
       setResults(response.data.data || []);
     } catch (err: any) {
+      // Only show error if we don't have existing results
+      if (results.length === 0) {
+        setError("Network error. Check if backend is running.");
+      }
       console.log("Search error:", err);
-      setError("Failed to search. Is your backend running on port 3000?");
     } finally {
       setLoading(false);
     }
   };
 
   const handlePlay = (track: any) => {
-    // Map remote youtube format back to player's LocalTrack format
+    Keyboard.dismiss();
     const streamUrl = `${BACKEND_URL}/api/music/stream/${track.id}`;
     
     playTrack({
       id: track.id,
       title: track.title,
       artist: track.artist,
-      album: "YouTube Search",
+      album: "Global Stream",
       duration: track.duration,
       uri: streamUrl,
     });
   };
 
-  const renderItem = ({ item }: { item: any }) => (
-    <TouchableOpacity 
-      style={styles.trackCard} 
-      onPress={() => handlePlay(item)}
-      activeOpacity={0.7}
-    >
-      <Image source={{ uri: item.thumbnail }} style={styles.thumbnail} />
-      <View style={styles.trackInfo}>
-        <Text style={styles.trackTitle} numberOfLines={1}>{item.title}</Text>
-        <Text style={styles.trackArtist} numberOfLines={1}>{item.artist}</Text>
-      </View>
-      <TouchableOpacity onPress={() => handlePlay(item)} style={styles.playButtonIcon}>
-        <Play 
-          color={currentTrack?.id === item.id && isPlaying ? theme.colors.primary : theme.colors.primaryLight} 
-          size={24} 
-          fill={currentTrack?.id === item.id && isPlaying ? theme.colors.primary : "transparent"} 
-        />
+  const formatViews = (views: number) => {
+    if (views >= 1000000) return (views / 1000000).toFixed(1) + 'M';
+    if (views >= 1000) return (views / 1000).toFixed(1) + 'K';
+    return views.toString();
+  };
+
+  const renderItem = ({ item }: { item: any }) => {
+    const isThisPlaying = currentTrack?.id === item.id && isPlaying;
+
+    return (
+      <TouchableOpacity 
+        style={[styles.trackCard, isThisPlaying && styles.activeTrackCard]} 
+        onPress={() => handlePlay(item)}
+        activeOpacity={0.7}
+      >
+        <View style={styles.thumbnailContainer}>
+          <Image source={{ uri: item.thumbnail }} style={styles.thumbnail} />
+          {isThisPlaying && (
+            <View style={styles.playingOverlay}>
+              <ActivityIndicator size="small" color={theme.colors.primary} />
+            </View>
+          )}
+        </View>
+        
+        <View style={styles.trackInfo}>
+          <Text style={[styles.trackTitle, isThisPlaying && { color: theme.colors.primaryLight }]} numberOfLines={1}>
+            {item.title}
+          </Text>
+          <Text style={styles.trackArtist} numberOfLines={1}>{item.artist}</Text>
+          {item.viewCount > 0 && (
+            <Text style={styles.viewLabel}>{formatViews(item.viewCount)} views</Text>
+          )}
+        </View>
+
+        <View style={styles.playButtonIcon}>
+          <Play 
+            color={isThisPlaying ? theme.colors.primary : theme.colors.textSecondary} 
+            size={20} 
+            fill={isThisPlaying ? theme.colors.primary : "transparent"} 
+          />
+        </View>
       </TouchableOpacity>
-    </TouchableOpacity>
-  );
+    );
+  };
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
       <View style={styles.header}>
-        <Text style={styles.title}>Global Search</Text>
+        <Text style={styles.title}>Explore</Text>
       </View>
 
       <View style={styles.searchContainer}>
@@ -84,7 +126,7 @@ export default function SearchScreen() {
           <SearchIcon color={theme.colors.textSecondary} size={20} style={styles.searchIcon} />
           <TextInput
             style={styles.input}
-            placeholder="Search YouTube for songs, artists..."
+            placeholder="Songs, artists, or podcasts"
             placeholderTextColor={theme.colors.textSecondary}
             value={query}
             onChangeText={setQuery}
@@ -92,19 +134,32 @@ export default function SearchScreen() {
             returnKeyType="search"
             autoCapitalize="none"
           />
+          {query.length > 0 && (
+            <TouchableOpacity onPress={() => setQuery("")}>
+              <X color={theme.colors.textSecondary} size={20} />
+            </TouchableOpacity>
+          )}
         </View>
-        <TouchableOpacity style={styles.searchBtn} onPress={handleSearch} disabled={loading}>
-          <Text style={styles.searchBtnText}>Search</Text>
-        </TouchableOpacity>
       </View>
 
       <View style={styles.content}>
-        {loading ? (
-          <ActivityIndicator size="large" color={theme.colors.primary} style={styles.centerBox} />
-        ) : error ? (
-          <Text style={styles.errorText}>{error}</Text>
-        ) : results.length === 0 ? (
-          <Text style={styles.emptyText}>Find any song from the global library.</Text>
+        {loading && results.length === 0 ? (
+          <View style={styles.centerBox}>
+            <ActivityIndicator size="large" color={theme.colors.primary} />
+            <Text style={styles.loadingText}>Searching global library...</Text>
+          </View>
+        ) : error && results.length === 0 ? (
+          <View style={styles.centerBox}>
+            <Text style={styles.errorText}>{error}</Text>
+            <TouchableOpacity style={styles.retryBtn} onPress={handleSearch}>
+              <Text style={styles.retryText}>Retry</Text>
+            </TouchableOpacity>
+          </View>
+        ) : results.length === 0 && !loading ? (
+          <View style={styles.centerBox}>
+             <SearchIcon color={theme.colors.surface} size={80} style={{ marginBottom: 20 }} />
+             <Text style={styles.emptyText}>Start typing to find music</Text>
+          </View>
         ) : (
           <FlatList
             data={results}
@@ -112,6 +167,7 @@ export default function SearchScreen() {
             renderItem={renderItem}
             contentContainerStyle={styles.listContent}
             showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
           />
         )}
       </View>
@@ -125,102 +181,120 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.background,
   },
   header: {
-    paddingHorizontal: theme.spacing.md,
-    paddingBottom: theme.spacing.sm,
-    paddingTop: theme.spacing.md,
+    paddingHorizontal: theme.spacing.lg,
+    paddingVertical: theme.spacing.sm,
   },
   title: {
     ...theme.typography.h1,
+    fontSize: 28,
   },
   searchContainer: {
-    flexDirection: 'row',
-    paddingHorizontal: theme.spacing.md,
+    paddingHorizontal: theme.spacing.lg,
     marginBottom: theme.spacing.md,
-    alignItems: 'center',
-    gap: 12,
   },
   inputWrapper: {
-    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: theme.colors.surface,
-    borderRadius: theme.borderRadius.full,
+    borderRadius: 8,
     paddingHorizontal: theme.spacing.md,
+    height: 48,
   },
   searchIcon: {
-    marginRight: 8,
+    marginRight: 10,
   },
   input: {
     flex: 1,
     color: theme.colors.text,
     fontSize: 16,
-    paddingVertical: 12,
-  },
-  searchBtn: {
-    backgroundColor: theme.colors.primary,
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-    borderRadius: theme.borderRadius.full,
-  },
-  searchBtnText: {
-    color: theme.colors.background,
-    fontWeight: 'bold',
-    fontSize: 16,
+    fontWeight: '500',
   },
   content: {
     flex: 1,
   },
   listContent: {
-    paddingHorizontal: theme.spacing.md,
-    paddingBottom: 100, // accommodate mini player
+    paddingHorizontal: theme.spacing.lg,
+    paddingBottom: 120,
   },
   centerBox: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    paddingBottom: 100,
   },
   emptyText: {
     ...theme.typography.body,
     color: theme.colors.textSecondary,
-    textAlign: 'center',
-    marginTop: 40,
+    fontSize: 18,
+  },
+  loadingText: {
+    color: theme.colors.textSecondary,
+    marginTop: 15,
+    fontSize: 14,
   },
   errorText: {
     ...theme.typography.body,
-    color: theme.colors.danger || 'red',
+    color: theme.colors.danger,
     textAlign: 'center',
-    marginTop: 40,
-    paddingHorizontal: 20,
+    marginBottom: 20,
+  },
+  retryBtn: {
+    paddingHorizontal: 25,
+    paddingVertical: 10,
+    backgroundColor: theme.colors.surface,
+    borderRadius: 20,
+  },
+  retryText: {
+    color: theme.colors.text,
+    fontWeight: 'bold',
   },
   trackCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: theme.spacing.md,
-    backgroundColor: theme.colors.surface,
-    borderRadius: theme.borderRadius.md,
-    marginBottom: theme.spacing.sm,
+    paddingVertical: theme.spacing.sm,
+    marginBottom: 4,
+  },
+  activeTrackCard: {
+    // Subtle highlight for currently playing
+  },
+  thumbnailContainer: {
+    position: 'relative',
   },
   thumbnail: {
-    width: 60,
-    height: 60,
-    borderRadius: theme.borderRadius.sm,
-    backgroundColor: theme.colors.border,
+    width: 52,
+    height: 52,
+    borderRadius: 4,
+    backgroundColor: theme.colors.surface,
+  },
+  playingOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: 4,
   },
   trackInfo: {
     flex: 1,
-    marginLeft: theme.spacing.md,
+    marginLeft: 12,
+    justifyContent: 'center',
   },
   trackTitle: {
     color: theme.colors.text,
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '600',
-    marginBottom: 4,
+    marginBottom: 2,
   },
   trackArtist: {
     color: theme.colors.textSecondary,
-    fontSize: 14,
+    fontSize: 13,
+    marginBottom: 2,
+  },
+  viewLabel: {
+    color: theme.colors.textSecondary,
+    fontSize: 11,
+    opacity: 0.7,
   },
   playButtonIcon: {
-    padding: 10,
+    marginLeft: 10,
   }
 });
