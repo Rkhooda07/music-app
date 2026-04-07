@@ -1,201 +1,127 @@
-import React, { useEffect } from "react";
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Alert } from "react-native";
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { scanLocalMusic } from "../utils/scanLocalMusic";
-import { useLibraryStore } from "../store/library.store";
-import { theme } from "../utils/theme";
-import { Play, FolderPlus } from "lucide-react-native";
-import { usePlayerStore } from "../store/player.store";
-import * as DocumentPicker from "expo-document-picker";
+import React from 'react';
+import { View, Text, StyleSheet, SafeAreaView, ScrollView } from 'react-native';
+import { theme } from '../theme';
+import { useUserStore } from '../store/user.store';
+import { Music2 } from 'lucide-react-native';
 
-export default function HomeScreen({ navigation }: any) {
-  const insets = useSafeAreaInsets();
-  const { tracks, setTracks, addTrack } = useLibraryStore();
-  const playTrack = usePlayerStore(s => s.playTrack);
-
-  const handleScan = async () => {
-    try {
-      const scannedTracks = await scanLocalMusic();
-      setTracks(scannedTracks);
-    } catch (err) {
-      console.log("SCAN ERROR: ", err);
-      Alert.alert("Permission Error", "Expo Go blocks global media scanning on this Android version. Use the 'Import Files' button below to add songs manually!");
-    }
-  };
-
-  const handleImport = async () => {
-    try {
-      const result = await DocumentPicker.getDocumentAsync({
-        type: 'audio/*',
-        copyToCacheDirectory: false,
-        multiple: true,
-      });
-
-      if (!result.canceled && result.assets) {
-        for (const asset of result.assets) {
-          addTrack({
-            id: asset.uri,
-            uri: asset.uri,
-            title: asset.name ? asset.name.replace(/\.[^/.]+$/, "") : "Unknown Track",
-            artist: "Unknown Artist",
-            album: "Imported Audio",
-            duration: 0,
-          });
-        }
-      }
-    } catch (err) {
-      console.log("Import error:", err);
-    }
-  };
-
-  const playRandom = () => {
-    if (tracks.length > 0) {
-      const randomIndex = Math.floor(Math.random() * tracks.length);
-      playTrack(tracks[randomIndex]);
-    }
-  };
+const HomeScreen = () => {
+  const feeling = useUserStore(s => s.feeling);
 
   return (
-    <ScrollView style={[styles.container, { paddingTop: insets.top }]}>
+    <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.greeting}>Good Evening</Text>
-        <Text style={styles.subtitle}>Welcome to Your Music</Text>
+        <Text style={styles.title}>Home</Text>
+        {feeling && (
+          <View style={styles.feelingBadge}>
+            <Text style={styles.feelingLabel}>Feeling {feeling}</Text>
+          </View>
+        )}
       </View>
 
-      <View style={styles.statsCard}>
-        <View>
-          <Text style={styles.statsValue}>{tracks.length}</Text>
-          <Text style={styles.statsLabel}>Local Tracks</Text>
+      <ScrollView contentContainerStyle={styles.content}>
+        <View style={styles.placeholderCard}>
+          <Music2 size={48} color={theme.colors.primaryLight} />
+          <Text style={styles.placeholderText}>Your {feeling || 'music'} world is here.</Text>
+          <Text style={styles.placeholderSubText}>Loading your recommendations...</Text>
         </View>
-        <TouchableOpacity style={styles.scanButton} onPress={handleScan}>
-          <Text style={styles.scanButtonText}>Auto-Scan</Text>
-        </TouchableOpacity>
-      </View>
 
-      <View style={styles.actions}>
-        <TouchableOpacity style={styles.playAllButton} onPress={playRandom} activeOpacity={0.8}>
-          <Play color={theme.colors.background} size={24} fill={theme.colors.background} />
-          <Text style={styles.playAllText}>Shuffle Play</Text>
-        </TouchableOpacity>
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Recently Played</Text>
+          <View style={[styles.cardRow, { height: 160 }]}>
+             <View style={styles.miniCard} />
+             <View style={styles.miniCard} />
+             <View style={styles.miniCard} />
+          </View>
+        </View>
 
-        <TouchableOpacity style={styles.importButton} onPress={handleImport} activeOpacity={0.8}>
-          <FolderPlus color={theme.colors.text} size={20} />
-          <Text style={styles.importText}>Import Files Manually</Text>
-        </TouchableOpacity>
-      </View>
-
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Quick Links</Text>
-        <TouchableOpacity 
-          style={styles.linkCard}
-          onPress={() => navigation.navigate('Library')}
-        >
-          <Text style={styles.linkCardTitle}>Your Library</Text>
-          <Text style={styles.linkCardDesc}>Browse all your local files</Text>
-        </TouchableOpacity>
-      </View>
-
-      <View style={{ height: 100 }} /> 
-    </ScrollView>
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>For You</Text>
+          <View style={[styles.cardRow, { height: 160 }]}>
+             <View style={styles.miniCard} />
+             <View style={styles.miniCard} />
+          </View>
+        </View>
+      </ScrollView>
+    </SafeAreaView>
   );
-}
+};
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: theme.colors.background,
-    paddingHorizontal: theme.spacing.md,
   },
   header: {
-    marginTop: theme.spacing.xl,
-    marginBottom: theme.spacing.lg,
-  },
-  greeting: {
-    ...theme.typography.h1,
-  },
-  subtitle: {
-    ...theme.typography.body,
-    color: theme.colors.primaryLight,
-    marginTop: 4,
-  },
-  statsCard: {
-    backgroundColor: theme.colors.surface,
-    borderRadius: theme.borderRadius.md,
-    padding: theme.spacing.lg,
+    padding: 24,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: theme.spacing.lg,
   },
-  statsValue: {
-    ...theme.typography.h2,
-    color: theme.colors.primary,
-  },
-  statsLabel: {
-    ...theme.typography.caption,
-    marginTop: 4,
-  },
-  scanButton: {
-    backgroundColor: theme.colors.border,
-    paddingHorizontal: theme.spacing.md,
-    paddingVertical: theme.spacing.sm,
-    borderRadius: theme.borderRadius.full,
-  },
-  scanButtonText: {
+  title: {
+    fontSize: 32,
+    fontWeight: '800',
     color: theme.colors.text,
-    fontWeight: '600',
   },
-  actions: {
-    marginBottom: theme.spacing.xl,
-  },
-  playAllButton: {
-    backgroundColor: theme.colors.primary,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: theme.spacing.md,
-    borderRadius: theme.borderRadius.full,
-  },
-  playAllText: {
-    color: theme.colors.background,
-    fontWeight: 'bold',
-    fontSize: 18,
-    marginLeft: theme.spacing.sm,
-  },
-  importButton: {
-    backgroundColor: 'transparent',
+  feelingBadge: {
+    backgroundColor: theme.colors.surface,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
     borderWidth: 1,
     borderColor: theme.colors.border,
-    flexDirection: 'row',
+  },
+  feelingLabel: {
+    color: theme.colors.primaryLight,
+    fontSize: 14,
+    fontWeight: '600',
+    textTransform: 'capitalize',
+  },
+  content: {
+    padding: 24,
+  },
+  placeholderCard: {
+    backgroundColor: theme.colors.surface,
+    borderRadius: 24,
+    padding: 40,
     alignItems: 'center',
     justifyContent: 'center',
-    padding: theme.spacing.md,
-    borderRadius: theme.borderRadius.full,
-    marginTop: theme.spacing.sm,
+    marginBottom: 32,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
   },
-  importText: {
+  placeholderText: {
     color: theme.colors.text,
-    fontWeight: '600',
-    fontSize: 16,
-    marginLeft: theme.spacing.sm,
+    fontSize: 20,
+    fontWeight: '700',
+    marginTop: 16,
+    textAlign: 'center',
+  },
+  placeholderSubText: {
+    color: theme.colors.textSecondary,
+    fontSize: 14,
+    marginTop: 8,
+    textAlign: 'center',
   },
   section: {
-    marginBottom: theme.spacing.xl,
+    marginBottom: 32,
   },
   sectionTitle: {
-    ...theme.typography.h2,
-    marginBottom: theme.spacing.md,
+    fontSize: 20,
+    fontWeight: '700',
+    color: theme.colors.text,
+    marginBottom: 16,
   },
-  linkCard: {
+  cardRow: {
+    flexDirection: 'row',
+    gap: 16,
+  },
+  miniCard: {
+    flex: 1,
     backgroundColor: theme.colors.surface,
-    padding: theme.spacing.md,
-    borderRadius: theme.borderRadius.sm,
-  },
-  linkCardTitle: {
-    ...theme.typography.h3,
-    marginBottom: 4,
-  },
-  linkCardDesc: {
-    ...theme.typography.caption,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
   }
 });
+
+export default HomeScreen;

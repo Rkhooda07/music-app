@@ -1,118 +1,85 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Image } from 'react-native';
-import { usePlayerStore } from '../store/player.store';
-import { Play, Pause, SkipForward } from 'lucide-react-native';
-import { theme } from '../utils/theme';
-import { useNavigation } from '@react-navigation/native';
-import { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
-import { RootTabParamList } from '../navigation/types';
+import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
+import { theme } from '../theme';
+import { Play, SkipForward, Music2 } from 'lucide-react-native';
 
-export function MiniPlayer() {
-  const { currentTrack, isPlaying, isLoading, pause, resume, positionMillis, durationMillis, nextTrack } = usePlayerStore();
-  const navigation = useNavigation<BottomTabNavigationProp<RootTabParamList>>();
-
-  if (!currentTrack) return null;
-
-  const progress = durationMillis > 0 ? (positionMillis / durationMillis) : 0;
+export const MiniPlayer = () => {
+  // Placeholder for current track info
+  const currentTrack = {
+    title: 'No track playing',
+    artist: 'Select a song',
+  };
 
   return (
-    <TouchableOpacity 
-      style={styles.container} 
-      activeOpacity={0.9}
-      onPress={() => navigation.navigate('Player')}
-    >
-      <View style={styles.content}>
-        <Image source={{ uri: currentTrack.thumbnail }} style={styles.thumbnail} />
-        <View style={styles.info}>
+    <View style={styles.container}>
+      <View style={styles.trackInfo}>
+        <View style={styles.albumArt}>
+          <Music2 color={theme.colors.textSecondary} size={20} />
+        </View>
+        <View style={styles.textContent}>
           <Text style={styles.title} numberOfLines={1}>{currentTrack.title}</Text>
           <Text style={styles.artist} numberOfLines={1}>{currentTrack.artist}</Text>
         </View>
-        
-        <View style={styles.actions}>
-          <TouchableOpacity 
-            style={styles.actionButton} 
-            onPress={() => isPlaying ? pause() : resume()}
-            disabled={isLoading}
-          >
-            {isLoading ? (
-              <ActivityIndicator color={theme.colors.text} size="small" />
-            ) : isPlaying ? (
-              <Pause color={theme.colors.text} size={24} fill={theme.colors.text} />
-            ) : (
-              <Play color={theme.colors.text} size={24} fill={theme.colors.text} />
-            )}
-          </TouchableOpacity>
-
-          <TouchableOpacity style={styles.actionButton} onPress={() => nextTrack()}>
-            <SkipForward color={theme.colors.text} size={24} fill={theme.colors.text} />
-          </TouchableOpacity>
-        </View>
       </View>
-      <View style={styles.progressBarBg}>
-        <View style={[styles.progressBarFill, { width: `${progress * 100}%` }]} />
+      
+      <View style={styles.controls}>
+        <TouchableOpacity style={styles.controlButton}>
+          <Play color={theme.colors.text} size={24} fill={theme.colors.text} />
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.controlButton}>
+          <SkipForward color={theme.colors.text} size={24} fill={theme.colors.text} />
+        </TouchableOpacity>
       </View>
-    </TouchableOpacity>
+    </View>
   );
-}
+};
 
 const styles = StyleSheet.create({
   container: {
-    position: 'absolute',
-    bottom: 50, 
-    left: 8,
-    right: 8,
-    backgroundColor: theme.colors.surface,
-    borderRadius: 12,
-    overflow: 'hidden',
-    elevation: 10,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.05)',
-  },
-  content: {
+    height: 70,
+    backgroundColor: 'rgba(28, 28, 34, 0.98)',
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 8,
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    borderTopWidth: 1,
+    borderColor: theme.colors.border,
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
   },
-  thumbnail: {
-    width: 44,
-    height: 44,
-    borderRadius: 6,
-    backgroundColor: theme.colors.border,
-  },
-  info: {
+  trackInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
     flex: 1,
-    paddingHorizontal: 12,
+  },
+  albumArt: {
+    width: 48,
+    height: 48,
+    borderRadius: 8,
+    backgroundColor: theme.colors.surface,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  textContent: {
+    flex: 1,
   },
   title: {
-    fontSize: 14,
+    color: '#FFF',
+    fontSize: 16,
     fontWeight: '700',
-    color: theme.colors.text,
-    marginBottom: 2,
   },
   artist: {
-    fontSize: 12,
     color: theme.colors.textSecondary,
-    fontWeight: '500',
+    fontSize: 13,
   },
-  actions: {
+  controls: {
     flexDirection: 'row',
     alignItems: 'center',
   },
-  actionButton: {
-    padding: 8,
-    marginLeft: 4,
-  },
-  progressBarBg: {
-    height: 2.5,
-    backgroundColor: 'rgba(255,255,255,0.05)',
-    width: '100%',
-  },
-  progressBarFill: {
-    height: '100%',
-    backgroundColor: theme.colors.text,
+  controlButton: {
+    marginLeft: 16,
   },
 });
