@@ -4,6 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { theme } from '../theme';
 import { useUserStore } from '../store/user.store';
 import { House, Music2, Search } from 'lucide-react-native';
+import { MiniPlayer } from '../components/MiniPlayer';
 
 const HomeScreen = () => {
   const feeling = useUserStore(s => s.feeling);
@@ -62,6 +63,8 @@ const HomeScreen = () => {
           </View>
         </View>
       </ScrollView>
+
+      <MiniPlayer />
     </SafeAreaView>
   );
 };
@@ -111,7 +114,7 @@ const styles = StyleSheet.create({
   },
   content: {
     padding: 24,
-    paddingBottom: 40,
+    paddingBottom: 156,
   },
   placeholderCard: {
     backgroundColor: theme.colors.surface,

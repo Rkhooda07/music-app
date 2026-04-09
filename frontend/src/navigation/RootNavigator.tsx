@@ -2,6 +2,7 @@ import React from 'react';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import GreetingScreen from '../screens/GreetingScreen';
 import HomeScreen from '../screens/HomeScreen';
+import PlayerScreen from '../screens/PlayerScreen';
 
 import { RootStackParamList } from './types';
 
@@ -17,6 +18,7 @@ export const RootNavigator = () => {
     >
       <Stack.Screen name="Greeting" component={GreetingScreen} />
       <Stack.Screen name="Home" component={HomeScreen} />
+      <Stack.Screen name="Player" component={PlayerScreen} />
     </Stack.Navigator>
   );
 };
