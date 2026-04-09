@@ -12,7 +12,7 @@ import Slider from '@react-native-community/slider';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { ChevronDown, Pause, Play, SkipBack, SkipForward } from 'lucide-react-native';
+import { ChevronDown, Music2, Pause, Play, SkipBack, SkipForward } from 'lucide-react-native';
 import { RootStackParamList } from '../navigation/types';
 import { theme } from '../theme';
 import { usePlayerStore } from '../store/player.store';
@@ -28,6 +28,7 @@ const PlayerScreen = () => {
   const currentTrack = usePlayerStore((s) => s.currentTrack);
   const isPlaying = usePlayerStore((s) => s.isPlaying);
   const progress = usePlayerStore((s) => s.progress);
+  const duration = usePlayerStore((s) => s.duration);
   const togglePlayback = usePlayerStore((s) => s.togglePlayback);
   const seekTo = usePlayerStore((s) => s.seekTo);
   const skipNext = usePlayerStore((s) => s.skipNext);
@@ -35,7 +36,7 @@ const PlayerScreen = () => {
   const rotation = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    if (!isPlaying) {
+    if (!isPlaying || !currentTrack) {
       rotation.stopAnimation();
       return;
     }
@@ -53,7 +54,7 @@ const PlayerScreen = () => {
     animation.start();
 
     return () => animation.stop();
-  }, [isPlaying, rotation]);
+  }, [isPlaying, currentTrack, rotation]);
 
   const spin = rotation.interpolate({
     inputRange: [0, 1],
@@ -77,51 +78,69 @@ const PlayerScreen = () => {
         <View style={styles.headerSpacer} />
       </View>
 
-      <View style={styles.content}>
-        <Text style={styles.trackTitle}>{currentTrack.title}</Text>
-        <Text style={styles.trackArtist}>{currentTrack.artist}</Text>
-
-        <View style={styles.discShell}>
-          <Animated.View style={[styles.disc, { transform: [{ rotate: spin }] }]}>
-            <Image source={currentTrack.artwork} style={styles.artwork} />
-            <View style={styles.discCenterOuter}>
-              <View style={styles.discCenterInner} />
-            </View>
-          </Animated.View>
+      {!currentTrack ? (
+        <View style={styles.emptyState}>
+          <View style={styles.emptyDisc}>
+            <Music2 size={40} color={theme.colors.textSecondary} />
+          </View>
+          <Text style={styles.emptyTitle}>Pick a song first</Text>
+          <Text style={styles.emptyText}>Search on the home screen and start any track to open the full player.</Text>
         </View>
+      ) : (
+        <View style={styles.content}>
+          <Text style={styles.trackTitle}>{currentTrack.title}</Text>
+          <Text style={styles.trackArtist}>{currentTrack.artist}</Text>
 
-        <View style={styles.progressSection}>
-          <Slider
-            minimumValue={0}
-            maximumValue={currentTrack.duration}
-            value={progress}
-            onSlidingComplete={seekTo}
-            minimumTrackTintColor={theme.colors.primaryLight}
-            maximumTrackTintColor="rgba(255,255,255,0.14)"
-            thumbTintColor={theme.colors.text}
-          />
-          <View style={styles.timeRow}>
-            <Text style={styles.timeText}>{formatTime(progress)}</Text>
-            <Text style={styles.timeText}>{formatTime(currentTrack.duration)}</Text>
+          <View style={styles.discShell}>
+            <Animated.View style={[styles.disc, { transform: [{ rotate: spin }] }]}>
+              {currentTrack.thumbnail ? (
+                <Image source={{ uri: currentTrack.thumbnail }} style={styles.artwork} />
+              ) : (
+                <View style={[styles.artwork, styles.artworkFallback]}>
+                  <Music2 size={52} color={theme.colors.textSecondary} />
+                </View>
+              )}
+              <View style={styles.discCenterOuter}>
+                <View style={styles.discCenterInner} />
+              </View>
+            </Animated.View>
+          </View>
+
+          <View style={styles.progressSection}>
+            <Slider
+              minimumValue={0}
+              maximumValue={Math.max(duration, currentTrack.duration || 0, 1)}
+              value={progress}
+              onSlidingComplete={(value) => {
+                void seekTo(value);
+              }}
+              minimumTrackTintColor={theme.colors.primaryLight}
+              maximumTrackTintColor="rgba(255,255,255,0.14)"
+              thumbTintColor={theme.colors.text}
+            />
+            <View style={styles.timeRow}>
+              <Text style={styles.timeText}>{formatTime(progress)}</Text>
+              <Text style={styles.timeText}>{formatTime(Math.max(duration, currentTrack.duration || 0))}</Text>
+            </View>
+          </View>
+
+          <View style={styles.controls}>
+            <TouchableOpacity style={styles.secondaryControl} activeOpacity={0.82} onPress={() => void skipPrevious()}>
+              <SkipBack size={26} color={theme.colors.text} fill={theme.colors.text} />
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.primaryControl} activeOpacity={0.9} onPress={() => void togglePlayback()}>
+              {isPlaying ? (
+                <Pause size={30} color={theme.colors.background} fill={theme.colors.background} />
+              ) : (
+                <Play size={30} color={theme.colors.background} fill={theme.colors.background} />
+              )}
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.secondaryControl} activeOpacity={0.82} onPress={() => void skipNext()}>
+              <SkipForward size={26} color={theme.colors.text} fill={theme.colors.text} />
+            </TouchableOpacity>
           </View>
         </View>
-
-        <View style={styles.controls}>
-          <TouchableOpacity style={styles.secondaryControl} activeOpacity={0.82} onPress={skipPrevious}>
-            <SkipBack size={26} color={theme.colors.text} fill={theme.colors.text} />
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.primaryControl} activeOpacity={0.9} onPress={togglePlayback}>
-            {isPlaying ? (
-              <Pause size={30} color={theme.colors.background} fill={theme.colors.background} />
-            ) : (
-              <Play size={30} color={theme.colors.background} fill={theme.colors.background} />
-            )}
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.secondaryControl} activeOpacity={0.82} onPress={skipNext}>
-            <SkipForward size={26} color={theme.colors.text} fill={theme.colors.text} />
-          </TouchableOpacity>
-        </View>
-      </View>
+      )}
     </SafeAreaView>
   );
 };
@@ -184,6 +203,35 @@ const styles = StyleSheet.create({
     paddingBottom: 42,
     justifyContent: 'space-between',
   },
+  emptyState: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 28,
+  },
+  emptyDisc: {
+    width: 180,
+    height: 180,
+    borderRadius: 90,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderWidth: 10,
+    borderColor: 'rgba(255,255,255,0.04)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 26,
+  },
+  emptyTitle: {
+    color: theme.colors.text,
+    fontSize: 24,
+    fontWeight: '800',
+  },
+  emptyText: {
+    color: theme.colors.textSecondary,
+    fontSize: 15,
+    textAlign: 'center',
+    lineHeight: 22,
+    marginTop: 12,
+  },
   trackTitle: {
     color: theme.colors.text,
     fontSize: 32,
@@ -220,7 +268,11 @@ const styles = StyleSheet.create({
     width: 192,
     height: 192,
     borderRadius: 96,
-    opacity: 0.95,
+  },
+  artworkFallback: {
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   discCenterOuter: {
     position: 'absolute',

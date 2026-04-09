@@ -1,8 +1,9 @@
 import { create } from 'zustand';
+import { Feeling } from '../types/music';
 
 interface UserState {
-  feeling: string | null;
-  setFeeling: (feeling: string) => void;
+  feeling: Feeling | null;
+  setFeeling: (feeling: Feeling) => void;
   reset: () => void;
 }
 

@@ -9,6 +9,7 @@ dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+const HOST = process.env.HOST || '0.0.0.0';
 
 // Middleware
 app.use(cors());
@@ -25,6 +26,6 @@ app.get('/health', (req, res) => {
 // Error handling
 app.use(errorHandler);
 
-app.listen(PORT, () => {
-  logger.info(`Server is running in ${process.env.NODE_ENV} mode on port ${PORT}`);
+app.listen(Number(PORT), HOST, () => {
+  logger.info(`Server is running in ${process.env.NODE_ENV} mode on ${HOST}:${PORT}`);
 });

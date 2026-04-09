@@ -6,14 +6,15 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { RootStackParamList } from '../navigation/types';
 import { useUserStore } from '../store/user.store';
 import { theme } from '../theme';
+import { Feeling } from '../types/music';
 
 const { width } = Dimensions.get('window');
 
 const genres = [
-  { id: 'chill', label: 'Chill', color: theme.colors.chill },
-  { id: 'rap', label: 'Rap', color: theme.colors.rap },
-  { id: 'hardcore', label: 'Hardcore', color: theme.colors.hardcore },
-  { id: 'love', label: 'Love', color: theme.colors.accent },
+  { id: 'chill' as const, label: 'Chill', color: theme.colors.chill },
+  { id: 'rap' as const, label: 'Rap', color: theme.colors.rap },
+  { id: 'hardcore' as const, label: 'Hardcore', color: theme.colors.hardcore },
+  { id: 'love' as const, label: 'Love', color: theme.colors.accent },
 ];
 
 const GreetingScreen = () => {
@@ -94,7 +95,7 @@ const GreetingScreen = () => {
     }).start();
   }, [footerOpacity]);
 
-  const handleGenreSelect = (id: string) => {
+  const handleGenreSelect = (id: Feeling) => {
     if (selectedFeeling === id) {
       resetFeeling();
       return;
