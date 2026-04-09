@@ -2,6 +2,7 @@ import React, { useEffect, useRef } from 'react';
 import { Animated, Dimensions, Easing, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { RootStackParamList } from '../navigation/types';
 import { useUserStore } from '../store/user.store';
 import { theme } from '../theme';
@@ -18,6 +19,7 @@ const genres = [
 const GreetingScreen = () => {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const setFeeling = useUserStore(s => s.setFeeling);
+  const resetFeeling = useUserStore(s => s.reset);
   const selectedFeeling = useUserStore(s => s.feeling);
 
   const titleOpacity = useRef(new Animated.Value(0)).current;
@@ -27,6 +29,10 @@ const GreetingScreen = () => {
   const profileOpacity = useRef(new Animated.Value(0)).current;
   const profileTranslateY = useRef(new Animated.Value(40)).current;
   const footerOpacity = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    resetFeeling();
+  }, [resetFeeling]);
 
   useEffect(() => {
     Animated.parallel([
@@ -81,19 +87,32 @@ const GreetingScreen = () => {
 
   useEffect(() => {
     Animated.timing(footerOpacity, {
-      toValue: selectedFeeling ? 1 : 0,
-      duration: 200,
+      toValue: 1,
+      duration: 350,
       easing: Easing.out(Easing.quad),
       useNativeDriver: true,
     }).start();
-  }, [footerOpacity, selectedFeeling]);
+  }, [footerOpacity]);
 
   const handleGenreSelect = (id: string) => {
+    if (selectedFeeling === id) {
+      resetFeeling();
+      return;
+    }
+
     setFeeling(id);
   };
 
+  const handleContinue = () => {
+    if (!selectedFeeling) {
+      setFeeling('freestyle');
+    }
+
+    navigation.navigate('Home');
+  };
+
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['top', 'left', 'right', 'bottom']}>
       <View style={styles.header}>
         <Animated.Text
           style={[
@@ -149,21 +168,21 @@ const GreetingScreen = () => {
         </View>
       </Animated.View>
 
-      {selectedFeeling && (
-        <Animated.View
-          style={[
-            styles.footer,
-            {
-              opacity: footerOpacity,
-            },
-          ]}
-        >
-          <TouchableOpacity onPress={() => navigation.navigate('Home')}>
-            <Text style={styles.continueText}>Click to continue to home page</Text>
-          </TouchableOpacity>
-        </Animated.View>
-      )}
-    </View>
+      <Animated.View
+        style={[
+          styles.footer,
+          {
+            opacity: footerOpacity,
+          },
+        ]}
+      >
+        <TouchableOpacity onPress={handleContinue}>
+          <Text style={styles.continueText}>
+            {selectedFeeling ? 'Click to continue to home page' : "I'll freestyle"}
+          </Text>
+        </TouchableOpacity>
+      </Animated.View>
+    </SafeAreaView>
   );
 };
 
@@ -173,6 +192,7 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.background,
     justifyContent: 'center',
     paddingHorizontal: 30,
+    paddingTop: 24,
   },
   header: {
     marginBottom: 50,
@@ -225,6 +245,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     alignItems: 'center',
+    paddingHorizontal: 30,
   },
   continueText: {
     fontSize: 16,
