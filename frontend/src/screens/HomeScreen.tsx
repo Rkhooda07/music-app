@@ -67,9 +67,11 @@ const HomeScreen = () => {
 
   const searchResults = useQuery({
     queryKey: ['music-search', activeQuery],
-    queryFn: () => searchMusic(activeQuery),
+    queryFn: ({ signal }) => searchMusic(activeQuery, signal),
     enabled: activeQuery.length > 0,
+    retry: 0,
     staleTime: 1000 * 60 * 5,
+    gcTime: 1000 * 60 * 10,
   });
 
   const featuredTrack = searchResults.data?.[0] || null;

@@ -1,6 +1,6 @@
 import { Audio, InterruptionModeAndroid, InterruptionModeIOS } from 'expo-av';
 import { create } from 'zustand';
-import { getStreamUrl } from '../api/music';
+import { API_BASE_URL } from '../api/music';
 import { MusicTrack } from '../types/music';
 
 interface PlayerState {
@@ -99,7 +99,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
         return;
       }
 
-      const streamUrl = await getStreamUrl(track.id);
+      const streamUrl = `${API_BASE_URL}/stream/${track.id}`;
 
       if (playbackRequest !== latestPlaybackRequest) {
         return;

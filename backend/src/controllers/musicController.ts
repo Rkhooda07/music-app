@@ -1,13 +1,42 @@
-import { Request, Response, NextFunction } from 'express';
-import { searchYouTube, getAudioStreamUrl } from '../services/ytDlpService';
+import { NextFunction, Request, Response } from 'express';
+import { Readable } from 'stream';
+import { pipeline } from 'stream/promises';
+import { MusicSearchResult } from '../services/musicTypes';
+import { resolveStreamDescriptor, warmTopSearchResults } from '../services/streamService';
+import { YouTubeDataApiError, searchYouTubeWithDataApi } from '../services/youtubeDataApiService';
+import { searchYouTube } from '../services/ytDlpService';
 import logger from '../utils/logger';
 
-// In-memory caches
-const searchQueryCache = new Map<string, { data: any[]; timestamp: number }>();
-const streamCache = new Map<string, { url: string; timestamp: number }>();
+interface SearchCacheEntry {
+  data?: MusicSearchResult[];
+  expiresAt?: number;
+  pendingPromise?: Promise<MusicSearchResult[]>;
+}
 
+const searchQueryCache = new Map<string, SearchCacheEntry>();
 const SEARCH_TTL = 24 * 60 * 60 * 1000; // 24 hours
-const STREAM_TTL = 30 * 60 * 1000; // 30 minutes
+
+const isFreshSearchEntry = (entry?: SearchCacheEntry): entry is SearchCacheEntry & { data: MusicSearchResult[]; expiresAt: number } => {
+  return Boolean(entry?.data && entry.expiresAt && entry.expiresAt > Date.now());
+};
+
+const shouldFallbackToYtDlp = (error: unknown) => {
+  return error instanceof YouTubeDataApiError && error.shouldFallbackToYtDlp;
+};
+
+const loadSearchResults = async (query: string) => {
+  try {
+    return await searchYouTubeWithDataApi(query);
+  } catch (error) {
+    if (!shouldFallbackToYtDlp(error)) {
+      throw error;
+    }
+
+    const message = error instanceof Error ? error.message : 'unknown error';
+    logger.warn(`Falling back to yt-dlp search for "${query}": ${message}`);
+    return searchYouTube(query);
+  }
+};
 
 export const searchMusic = async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -17,51 +46,30 @@ export const searchMusic = async (req: Request, res: Response, next: NextFunctio
     }
 
     const query = q.trim().toLowerCase();
-
-    // 1. Check Search Cache (Instant hit)
     const cachedSearch = searchQueryCache.get(query);
-    if (cachedSearch && Date.now() - cachedSearch.timestamp < SEARCH_TTL) {
+    if (isFreshSearchEntry(cachedSearch)) {
       logger.info(`Search cache hit: ${query}`);
-      // Immediately return cached results
       res.json({ data: cachedSearch.data });
-      
-      // Still pre-warm top 3 results in the background in case streamCache expired
-      preWarmTracks(cachedSearch.data.slice(0, 3));
+      warmTopSearchResults(cachedSearch.data);
       return;
     }
 
-    // 2. Perform fresh search
-    const results = await searchYouTube(query);
-    searchQueryCache.set(query, { data: results, timestamp: Date.now() });
-    
-    // Return to user immediately
-    res.json({ data: results });
+    const pendingPromise = cachedSearch?.pendingPromise || loadSearchResults(query);
+    searchQueryCache.set(query, { ...cachedSearch, pendingPromise });
 
-    // 3. BACKGROUND PRE-WARMING (The "Spotify" trick)
-    // While the user is browsing results, we secretly fetch the stream URLs 
-    // for the top 3 results so they are ready when the user clicks 'Play'.
-    preWarmTracks(results.slice(0, 3));
+    const results = await pendingPromise;
+    searchQueryCache.set(query, {
+      data: results,
+      expiresAt: Date.now() + SEARCH_TTL,
+    });
+
+    res.json({ data: results });
+    warmTopSearchResults(results);
 
   } catch (error) {
+    searchQueryCache.delete(String(req.query.q || '').trim().toLowerCase());
     next(error);
   }
-};
-
-/**
- * Background worker to pre-extract stream URLs
- */
-const preWarmTracks = (tracks: any[]) => {
-    tracks.forEach(track => {
-        const videoId = track.id;
-        if (!streamCache.has(videoId) || Date.now() - streamCache.get(videoId)!.timestamp > STREAM_TTL) {
-            getAudioStreamUrl(videoId)
-                .then(url => {
-                    logger.info(`Pre-warmed track: ${videoId}`);
-                    streamCache.set(videoId, { url, timestamp: Date.now() });
-                })
-                .catch(() => { /* Silent failure for pre-warming */ });
-        }
-    });
 };
 
 export const getStreamUrl = async (req: Request, res: Response, next: NextFunction) => {
@@ -71,16 +79,8 @@ export const getStreamUrl = async (req: Request, res: Response, next: NextFuncti
       return res.status(400).json({ error: 'Video ID is required' });
     }
 
-    // Check Stream Cache
-    const cached = streamCache.get(videoId);
-    if (cached && Date.now() - cached.timestamp < STREAM_TTL) {
-      return res.json({ url: cached.url });
-    }
-
-    const streamUrl = await getAudioStreamUrl(videoId);
-    streamCache.set(videoId, { url: streamUrl, timestamp: Date.now() });
-    
-    res.json({ url: streamUrl });
+    const streamDescriptor = await resolveStreamDescriptor(videoId, 'play');
+    res.json({ url: streamDescriptor.url });
   } catch (error) {
     next(error);
   }
@@ -93,22 +93,68 @@ export const streamAudio = async (req: Request, res: Response, next: NextFunctio
       return res.status(400).json({ error: 'Video ID is required' });
     }
 
-    let streamUrl: string;
+    const streamDescriptor = await resolveStreamDescriptor(videoId, 'play');
+    const abortController = new AbortController();
+    const forwardedHeaders: Record<string, string> = {
+      ...streamDescriptor.httpHeaders,
+    };
+    const range = req.headers.range;
+    const ifRange = req.headers['if-range'];
 
-    // Check Stream Cache
-    const cached = streamCache.get(videoId);
-    if (cached && Date.now() - cached.timestamp < STREAM_TTL) {
-      streamUrl = cached.url;
-    } else {
-      logger.info(`Extracting audio for stream: ${videoId} (cache miss)`);
-      streamUrl = await getAudioStreamUrl(videoId);
-      streamCache.set(videoId, { url: streamUrl, timestamp: Date.now() });
+    if (typeof range === 'string') {
+      forwardedHeaders.Range = range;
     }
 
-    // Low-latency redirect
-    res.redirect(streamUrl);
+    if (typeof ifRange === 'string') {
+      forwardedHeaders['If-Range'] = ifRange;
+    }
+
+    const closeHandler = () => {
+      abortController.abort();
+    };
+
+    req.on('close', closeHandler);
+
+    try {
+      const upstreamResponse = await fetch(streamDescriptor.url, {
+        headers: forwardedHeaders,
+        signal: abortController.signal,
+      });
+
+      const responseHeaders = [
+        'accept-ranges',
+        'cache-control',
+        'content-length',
+        'content-range',
+        'content-type',
+        'etag',
+        'last-modified',
+      ];
+
+      responseHeaders.forEach((headerName) => {
+        const headerValue = upstreamResponse.headers.get(headerName);
+        if (headerValue) {
+          res.setHeader(headerName, headerValue);
+        }
+      });
+
+      res.status(upstreamResponse.status);
+
+      if (!upstreamResponse.body) {
+        res.end();
+        return;
+      }
+
+      const bodyStream = Readable.fromWeb(upstreamResponse.body as any);
+      await pipeline(bodyStream, res);
+    } finally {
+      req.off('close', closeHandler);
+    }
 
   } catch (error) {
+    if (error instanceof Error && error.name === 'AbortError') {
+      return;
+    }
     next(error);
   }
 };

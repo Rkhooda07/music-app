@@ -24,8 +24,8 @@ const handleResponse = async <T,>(response: Response): Promise<T> => {
   return response.json() as Promise<T>;
 };
 
-export const searchMusic = async (query: string): Promise<MusicTrack[]> => {
-  const response = await fetch(`${API_BASE_URL}/search?q=${encodeURIComponent(query)}`);
+export const searchMusic = async (query: string, signal?: AbortSignal): Promise<MusicTrack[]> => {
+  const response = await fetch(`${API_BASE_URL}/search?q=${encodeURIComponent(query)}`, { signal });
   const payload = await handleResponse<{ data: MusicTrack[] }>(response);
   return payload.data;
 };
