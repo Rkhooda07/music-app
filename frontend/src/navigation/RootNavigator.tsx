@@ -13,12 +13,22 @@ export const RootNavigator = () => {
     <Stack.Navigator
       screenOptions={{
         headerShown: false,
-        animation: 'fade',
+        animation: 'fade_from_bottom',
       }}
     >
       <Stack.Screen name="Greeting" component={GreetingScreen} />
       <Stack.Screen name="Home" component={HomeScreen} />
-      <Stack.Screen name="Player" component={PlayerScreen} />
+      <Stack.Screen
+        name="Player"
+        component={PlayerScreen}
+        options={{
+          presentation: 'transparentModal',
+          animation: 'none',
+          contentStyle: {
+            backgroundColor: 'transparent',
+          },
+        }}
+      />
     </Stack.Navigator>
   );
 };

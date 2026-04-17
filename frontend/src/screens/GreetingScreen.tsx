@@ -5,16 +5,16 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { RootStackParamList } from '../navigation/types';
 import { useUserStore } from '../store/user.store';
-import { theme } from '../theme';
+import { playerPalette } from '../constants/mockPlayer';
 import { Feeling } from '../types/music';
 
 const { width } = Dimensions.get('window');
 
 const genres = [
-  { id: 'chill' as const, label: 'Chill', color: theme.colors.chill },
-  { id: 'rap' as const, label: 'Rap', color: theme.colors.rap },
-  { id: 'hardcore' as const, label: 'Hardcore', color: theme.colors.hardcore },
-  { id: 'love' as const, label: 'Love', color: theme.colors.accent },
+  { id: 'chill' as const, label: 'Chill', color: '#dfece8' },
+  { id: 'rap' as const, label: 'Rap', color: '#eadfd6' },
+  { id: 'hardcore' as const, label: 'Hardcore', color: '#eadfce' },
+  { id: 'love' as const, label: 'Love', color: '#f1e2dd' },
 ];
 
 const GreetingScreen = () => {
@@ -159,7 +159,7 @@ const GreetingScreen = () => {
                 {
                   backgroundColor: genre.color,
                   borderWidth: selectedFeeling === genre.id ? 4 : 0,
-                  borderColor: '#FFF',
+                  borderColor: playerPalette.text,
                 },
               ]}
             >
@@ -190,7 +190,7 @@ const GreetingScreen = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: theme.colors.background,
+    backgroundColor: playerPalette.screen,
     justifyContent: 'center',
     paddingHorizontal: 30,
     paddingTop: 24,
@@ -201,13 +201,13 @@ const styles = StyleSheet.create({
   greeting: {
     fontSize: 48,
     fontWeight: '800',
-    color: theme.colors.text,
+    color: playerPalette.text,
     letterSpacing: -1,
   },
   subGreeting: {
     fontSize: 32,
     fontWeight: '500',
-    color: theme.colors.textSecondary,
+    color: playerPalette.textMuted,
     marginTop: 8,
   },
   gridContainer: {
@@ -221,24 +221,24 @@ const styles = StyleSheet.create({
   card: {
     width: (width - 80) / 2,
     aspectRatio: 1,
-    borderRadius: 8,
+    borderRadius: 24,
     marginBottom: 20,
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.5,
-    shadowRadius: 10,
+    shadowColor: playerPalette.shadow,
+    shadowOffset: { width: 0, height: 14 },
+    shadowOpacity: 0.24,
+    shadowRadius: 18,
     elevation: 8,
-    borderWidth: 2,
-    borderColor: 'transparent',
+    borderWidth: 1,
+    borderColor: 'rgba(219, 206, 186, 0.92)',
   },
   cardLabel: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#FFF',
+    color: playerPalette.text,
     textTransform: 'uppercase',
-    letterSpacing: 1,
+    letterSpacing: 0.9,
   },
   footer: {
     position: 'absolute',
@@ -251,9 +251,9 @@ const styles = StyleSheet.create({
   continueText: {
     fontSize: 16,
     fontWeight: '600',
-    color: theme.colors.primaryLight,
+    color: playerPalette.text,
     letterSpacing: 0.5,
-    opacity: 0.8,
+    opacity: 0.9,
   },
 });
 
