@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.streamAudio = exports.getStreamUrl = exports.searchMusic = void 0;
+exports.listFormats = exports.streamAudio = exports.getStreamUrl = exports.searchMusic = void 0;
 const stream_1 = require("stream");
 const promises_1 = require("stream/promises");
 const streamService_1 = require("../services/streamService");
@@ -138,3 +138,17 @@ const streamAudio = async (req, res, next) => {
     }
 };
 exports.streamAudio = streamAudio;
+const listFormats = async (req, res, next) => {
+    try {
+        const { videoId } = req.params;
+        if (!videoId || typeof videoId !== 'string') {
+            return res.status(400).json({ error: 'Video ID is required' });
+        }
+        const formats = await (0, ytDlpService_1.listFormats)(videoId);
+        res.type('text/plain').send(formats);
+    }
+    catch (error) {
+        next(error);
+    }
+};
+exports.listFormats = listFormats;

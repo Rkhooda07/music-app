@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getAudioStreamUrl = exports.getAudioStreamDescriptor = exports.searchYouTube = void 0;
+exports.getAudioStreamUrl = exports.getAudioStreamDescriptor = exports.searchYouTube = exports.listFormats = void 0;
 const child_process_1 = require("child_process");
 const path_1 = __importDefault(require("path"));
 const logger_1 = __importDefault(require("../utils/logger"));
@@ -20,12 +20,14 @@ const buildCookieArgs = () => {
     }
     return [];
 };
-const buildSharedArgs = () => {
+const buildSharedArgs = ({ includeCookies = true } = {}) => {
     return [
         '--no-warnings',
         '--no-check-certificates',
         '--no-cache-dir',
-        ...buildCookieArgs(),
+        '--js-runtimes',
+        'node',
+        ...(includeCookies ? buildCookieArgs() : []),
     ];
 };
 const buildExtractorArgs = (playerClients) => {
@@ -35,11 +37,23 @@ const buildExtractorArgs = (playerClients) => {
     return ['--extractor-args', `youtube:player_client=${playerClients}`];
 };
 const formatYtDlpError = (stderr) => {
+    if (stderr.includes('This video is DRM protected') || stderr.includes('DRM protected')) {
+        return 'This YouTube video is DRM protected, so the current backend cannot stream it.';
+    }
+    if (stderr.includes('PO Token')) {
+        return 'YouTube now requires a PO token for this video/client combination. The current backend cannot extract a playable stream without it.';
+    }
+    if (stderr.includes('Too Many Requests') || stderr.includes('HTTP Error 429')) {
+        return 'YouTube rate-limited extraction from this IP/session. Retry later or use a different authenticated session.';
+    }
     if (stderr.includes('Sign in to confirm you’re not a bot') || stderr.includes("Sign in to confirm you're not a bot")) {
         return 'YouTube blocked extraction. Add YT_DLP_COOKIES_FROM_BROWSER or YT_DLP_COOKIES_FILE to backend/.env so yt-dlp can use an authenticated session.';
     }
+    if (stderr.includes('Signature solving failed') || stderr.includes('n challenge solving failed')) {
+        return 'yt-dlp could not solve YouTube’s current signature challenge for this video, so no playable stream URL was exposed.';
+    }
     if (stderr.includes('Requested format is not available')) {
-        return 'This track does not expose the preferred audio format. The backend has been updated to fall back automatically after restart.';
+        return 'yt-dlp could not find a playable audio format for this video with the current fallback sequence.';
     }
     return 'Failed to extract audio URL';
 };
@@ -117,6 +131,74 @@ const summarizeFormats = (formats = []) => {
         .map((format) => `${format.format_id}:${format.ext || 'unknown'}:${format.acodec || 'na'}/${format.vcodec || 'na'}:${format.abr ?? format.tbr ?? 'na'}`)
         .join(', ');
 };
+const buildExtractionAttempts = (videoId) => {
+    const watchUrl = `https://www.youtube.com/watch?v=${videoId}`;
+    const sharedWithCookies = buildSharedArgs({ includeCookies: true });
+    const sharedWithoutCookies = buildSharedArgs({ includeCookies: false });
+    return [
+        {
+            name: 'default-bestaudio-with-cookies',
+            args: [
+                '--dump-json',
+                '--skip-download',
+                '-f', 'bestaudio',
+                ...sharedWithCookies,
+                watchUrl,
+            ],
+        },
+        {
+            name: 'default-best-with-audio-with-cookies',
+            args: [
+                '--dump-json',
+                '--skip-download',
+                '-f', 'best*[acodec!=none]/best',
+                ...sharedWithCookies,
+                watchUrl,
+            ],
+        },
+        {
+            name: 'default-info-with-cookies',
+            args: [
+                '--dump-json',
+                '--skip-download',
+                ...sharedWithCookies,
+                watchUrl,
+            ],
+        },
+        {
+            name: 'ios-bestaudio-no-cookies',
+            args: [
+                '--dump-json',
+                '--skip-download',
+                '-f', 'bestaudio',
+                ...buildExtractorArgs('ios'),
+                ...sharedWithoutCookies,
+                watchUrl,
+            ],
+        },
+        {
+            name: 'mweb-bestaudio-no-cookies',
+            args: [
+                '--dump-json',
+                '--skip-download',
+                '-f', 'bestaudio',
+                ...buildExtractorArgs('mweb'),
+                ...sharedWithoutCookies,
+                watchUrl,
+            ],
+        },
+        {
+            name: 'default-bestaudio-no-cookies',
+            args: [
+                '--dump-json',
+                '--skip-download',
+                '-f', 'bestaudio',
+                ...sharedWithoutCookies,
+                watchUrl,
+            ],
+        },
+    ];
+};
 const extractStreamDescriptor = (parsed) => {
     const preferredFormat = selectPreferredFormat(parsed.requested_formats) ||
         selectPreferredFormat(parsed.requested_downloads) ||
@@ -131,7 +213,7 @@ const extractStreamDescriptor = (parsed) => {
         expiresAt: parseExpiryFromStreamUrl(streamUrl),
     };
 };
-const runYtDlpJson = (args) => {
+const runYtDlpText = (args) => {
     return new Promise((resolve, reject) => {
         const ytDlp = (0, child_process_1.spawn)(ytDlpPath, args);
         let output = '';
@@ -142,18 +224,52 @@ const runYtDlpJson = (args) => {
             if (code !== 0 || !output) {
                 return reject(new Error(errorOutput || 'yt-dlp exited without output'));
             }
-            try {
-                resolve({
-                    parsed: JSON.parse(output),
-                    stderr: errorOutput,
-                });
-            }
-            catch {
-                reject(new Error('Failed to parse audio descriptor'));
-            }
+            resolve({
+                stdout: output,
+                stderr: errorOutput,
+            });
         });
     });
 };
+const runYtDlpJson = async (args) => {
+    const { stdout, stderr } = await runYtDlpText(args);
+    try {
+        return {
+            parsed: JSON.parse(stdout),
+            stderr,
+        };
+    }
+    catch {
+        throw new Error('Failed to parse audio descriptor');
+    }
+};
+const listFormats = async (videoId) => {
+    const watchUrl = `https://www.youtube.com/watch?v=${videoId}`;
+    const attempts = [
+        [
+            '--list-formats',
+            ...buildSharedArgs({ includeCookies: true }),
+            watchUrl,
+        ],
+        [
+            '--list-formats',
+            ...buildSharedArgs({ includeCookies: false }),
+            watchUrl,
+        ],
+    ];
+    let lastError = 'Failed to list formats';
+    for (const args of attempts) {
+        try {
+            const { stdout } = await runYtDlpText(args);
+            return stdout;
+        }
+        catch (error) {
+            lastError = error instanceof Error ? error.message : 'Failed to list formats';
+        }
+    }
+    throw new Error(lastError);
+};
+exports.listFormats = listFormats;
 const searchYouTube = (query) => {
     return new Promise((resolve, reject) => {
         logger_1.default.info(`Searching YouTube for: ${query}`);
@@ -205,71 +321,7 @@ exports.searchYouTube = searchYouTube;
 const getAudioStreamDescriptor = (videoId) => {
     return new Promise((resolve, reject) => {
         logger_1.default.info(`Extracting audio descriptor for video ID: ${videoId}`);
-        const watchUrl = `https://www.youtube.com/watch?v=${videoId}`;
-        const sharedArgs = buildSharedArgs();
-        const attempts = [
-            {
-                name: 'ios-mweb-info',
-                args: [
-                    '--dump-single-json',
-                    '--skip-download',
-                    ...buildExtractorArgs('ios,mweb'),
-                    watchUrl,
-                    ...sharedArgs,
-                ],
-            },
-            {
-                name: 'ios-web-info',
-                args: [
-                    '--dump-single-json',
-                    '--skip-download',
-                    ...buildExtractorArgs('ios,web'),
-                    watchUrl,
-                    ...sharedArgs,
-                ],
-            },
-            {
-                name: 'ios-mweb-bestaudio',
-                args: [
-                    '--dump-single-json',
-                    '--skip-download',
-                    '-f', 'bestaudio/best',
-                    ...buildExtractorArgs('ios,mweb'),
-                    watchUrl,
-                    ...sharedArgs,
-                ],
-            },
-            {
-                name: 'ios-web-bestaudio',
-                args: [
-                    '--dump-single-json',
-                    '--skip-download',
-                    '-f', 'bestaudio/best',
-                    ...buildExtractorArgs('ios,web'),
-                    watchUrl,
-                    ...sharedArgs,
-                ],
-            },
-            {
-                name: 'default-best-with-audio',
-                args: [
-                    '--dump-single-json',
-                    '--skip-download',
-                    '-f', 'best*[acodec!=none]/best',
-                    watchUrl,
-                    ...sharedArgs,
-                ],
-            },
-            {
-                name: 'default-client-info',
-                args: [
-                    '--dump-single-json',
-                    '--skip-download',
-                    watchUrl,
-                    ...sharedArgs,
-                ],
-            },
-        ];
+        const attempts = buildExtractionAttempts(videoId);
         (async () => {
             let lastError = 'Failed to extract audio URL';
             for (const attempt of attempts) {

@@ -4,7 +4,7 @@ import { pipeline } from 'stream/promises';
 import { MusicSearchResult } from '../services/musicTypes';
 import { resolveStreamDescriptor, warmTopSearchResults } from '../services/streamService';
 import { YouTubeDataApiError, searchYouTubeWithDataApi } from '../services/youtubeDataApiService';
-import { searchYouTube } from '../services/ytDlpService';
+import { listFormats as listYtDlpFormats, searchYouTube } from '../services/ytDlpService';
 import logger from '../utils/logger';
 
 interface SearchCacheEntry {
@@ -155,6 +155,20 @@ export const streamAudio = async (req: Request, res: Response, next: NextFunctio
     if (error instanceof Error && error.name === 'AbortError') {
       return;
     }
+    next(error);
+  }
+};
+
+export const listFormats = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { videoId } = req.params;
+    if (!videoId || typeof videoId !== 'string') {
+      return res.status(400).json({ error: 'Video ID is required' });
+    }
+
+    const formats = await listYtDlpFormats(videoId);
+    res.type('text/plain').send(formats);
+  } catch (error) {
     next(error);
   }
 };
