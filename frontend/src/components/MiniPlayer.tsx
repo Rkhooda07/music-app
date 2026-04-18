@@ -1,5 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import {
+  ActivityIndicator,
   Animated,
   Image,
   StyleSheet,
@@ -9,18 +10,34 @@ import {
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { Heart, Pause } from 'lucide-react-native';
+import { Pause, Play } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { fallbackArtwork, playerPalette } from '../constants/mockPlayer';
 import { RootStackParamList } from '../navigation/types';
-import { mockPlayerTrack, playerPalette } from '../constants/mockPlayer';
+import { usePlayerStore } from '../store/player.store';
+
+const getArtworkSource = (thumbnail?: string) =>
+  thumbnail ? { uri: thumbnail } : fallbackArtwork;
 
 export const MiniPlayer = () => {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const insets = useSafeAreaInsets();
+  const currentTrack = usePlayerStore((s) => s.currentTrack);
+  const isPlaying = usePlayerStore((s) => s.isPlaying);
+  const isLoading = usePlayerStore((s) => s.isLoading);
+  const sound = usePlayerStore((s) => s.sound);
+  const togglePlayback = usePlayerStore((s) => s.togglePlayback);
   const translateY = useRef(new Animated.Value(24)).current;
   const opacity = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
+    if (!currentTrack) {
+      return;
+    }
+
+    translateY.setValue(24);
+    opacity.setValue(0);
+
     Animated.parallel([
       Animated.spring(translateY, {
         toValue: 0,
@@ -35,7 +52,14 @@ export const MiniPlayer = () => {
         useNativeDriver: true,
       }),
     ]).start();
-  }, [opacity, translateY]);
+  }, [currentTrack, opacity, translateY]);
+
+  if (!currentTrack) {
+    return null;
+  }
+
+  const isStartingPlayback = isLoading && !sound;
+  const artistLabel = currentTrack.artist || 'Unknown artist';
 
   return (
     <Animated.View
@@ -54,20 +78,33 @@ export const MiniPlayer = () => {
         style={styles.container}
         onPress={() => navigation.navigate('Player')}
       >
-        <Image source={mockPlayerTrack.artwork} style={styles.albumArt} />
+        <Image source={getArtworkSource(currentTrack.thumbnail)} style={styles.albumArt} />
 
         <View style={styles.textContent}>
           <Text style={styles.title} numberOfLines={1}>
-            {mockPlayerTrack.title}
+            {currentTrack.title}
+          </Text>
+          <Text style={styles.artist} numberOfLines={1}>
+            {artistLabel}
           </Text>
         </View>
 
         <View style={styles.controls}>
-          <TouchableOpacity activeOpacity={0.85} style={styles.iconWrap}>
-            <Heart color={playerPalette.textMuted} size={17} strokeWidth={1.8} />
-          </TouchableOpacity>
-          <TouchableOpacity activeOpacity={0.85} style={styles.iconWrap}>
-            <Pause color={playerPalette.text} size={18} strokeWidth={2.2} />
+          <TouchableOpacity
+            activeOpacity={0.85}
+            style={[styles.iconWrap, isStartingPlayback && styles.iconWrapDisabled]}
+            onPress={() => {
+              void togglePlayback();
+            }}
+            disabled={isStartingPlayback}
+          >
+            {isStartingPlayback ? (
+              <ActivityIndicator color={playerPalette.text} size="small" />
+            ) : isPlaying ? (
+              <Pause color={playerPalette.text} size={18} strokeWidth={2.2} />
+            ) : (
+              <Play color={playerPalette.text} size={18} fill={playerPalette.text} strokeWidth={2.2} />
+            )}
           </TouchableOpacity>
         </View>
       </TouchableOpacity>
@@ -110,6 +147,7 @@ const styles = StyleSheet.create({
     width: 38,
     height: 38,
     borderRadius: 10,
+    backgroundColor: 'rgba(216, 204, 184, 0.22)',
   },
   textContent: {
     flex: 1,
@@ -122,16 +160,25 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     letterSpacing: 0.1,
   },
+  artist: {
+    color: playerPalette.textMuted,
+    fontSize: 11,
+    marginTop: 3,
+    fontWeight: '600',
+  },
   controls: {
     flexDirection: 'row',
     alignItems: 'center',
     marginLeft: 'auto',
-    gap: 2,
   },
   iconWrap: {
-    width: 30,
-    height: 30,
+    width: 34,
+    height: 34,
     alignItems: 'center',
     justifyContent: 'center',
+    borderRadius: 17,
+  },
+  iconWrapDisabled: {
+    opacity: 0.7,
   },
 });

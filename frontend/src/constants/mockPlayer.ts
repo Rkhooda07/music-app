@@ -10,24 +10,4 @@ export const playerPalette = {
   line: '#d7c9b4',
 };
 
-export interface MockPlayerTrack {
-  id: string;
-  title: string;
-  artist: string;
-  album: string;
-  artwork: ImageSourcePropType;
-  progress: number;
-  elapsedLabel: string;
-  durationLabel: string;
-}
-
-export const mockPlayerTrack: MockPlayerTrack = {
-  id: 'mock-no-tears',
-  title: 'no tears left to cry',
-  artist: 'Ariana Grande',
-  album: 'sweetener',
-  artwork: require('../../assets/icon.png'),
-  progress: 0.36,
-  elapsedLabel: '0:37',
-  durationLabel: '4:25',
-};
+export const fallbackArtwork: ImageSourcePropType = require('../../assets/icon.png');

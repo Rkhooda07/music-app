@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
+  ActivityIndicator,
   Animated,
   Easing,
   Image,
@@ -10,6 +11,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import type { GestureResponderEvent, LayoutChangeEvent } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -22,17 +24,46 @@ import {
   SkipForward,
   Shuffle,
 } from 'lucide-react-native';
-import { mockPlayerTrack, playerPalette } from '../constants/mockPlayer';
+import { fallbackArtwork, playerPalette } from '../constants/mockPlayer';
 import { RootStackParamList } from '../navigation/types';
+import { usePlayerStore } from '../store/player.store';
+
+const formatTime = (value: number) => {
+  if (!Number.isFinite(value) || value < 0) {
+    return '0:00';
+  }
+
+  const totalSeconds = Math.floor(value);
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+};
+
+const clamp = (value: number, min: number, max: number) => Math.min(Math.max(value, min), max);
+
+const getArtworkSource = (thumbnail?: string) =>
+  thumbnail ? { uri: thumbnail } : fallbackArtwork;
 
 const PlayerScreen = () => {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
-  const [isPlaying, setIsPlaying] = useState(true);
+  const currentTrack = usePlayerStore((s) => s.currentTrack);
+  const isPlaying = usePlayerStore((s) => s.isPlaying);
+  const isLoading = usePlayerStore((s) => s.isLoading);
+  const sound = usePlayerStore((s) => s.sound);
+  const progress = usePlayerStore((s) => s.progress);
+  const duration = usePlayerStore((s) => s.duration);
+  const currentIndex = usePlayerStore((s) => s.currentIndex);
+  const queue = usePlayerStore((s) => s.queue);
+  const togglePlayback = usePlayerStore((s) => s.togglePlayback);
+  const seekTo = usePlayerStore((s) => s.seekTo);
+  const skipNext = usePlayerStore((s) => s.skipNext);
+  const skipPrevious = usePlayerStore((s) => s.skipPrevious);
   const fade = useRef(new Animated.Value(0)).current;
   const lift = useRef(new Animated.Value(18)).current;
   const artworkFloat = useRef(new Animated.Value(0)).current;
   const wheelScale = useRef(new Animated.Value(0.92)).current;
   const dragY = useRef(new Animated.Value(0)).current;
+  const [progressTrackWidth, setProgressTrackWidth] = useState(0);
 
   const dismissPlayer = () => {
     Animated.parallel([
@@ -135,6 +166,41 @@ const PlayerScreen = () => {
     };
   }, [artworkFloat, fade, lift, wheelScale]);
 
+  useEffect(() => {
+    if (!currentTrack) {
+      navigation.goBack();
+    }
+  }, [currentTrack, navigation]);
+
+  if (!currentTrack) {
+    return null;
+  }
+
+  const safeDuration = duration > 0 ? duration : currentTrack.duration || 0;
+  const progressRatio = safeDuration > 0 ? clamp(progress / safeDuration, 0, 1) : 0;
+  const progressThumbOffset = progressTrackWidth > 0
+    ? clamp(progressRatio * progressTrackWidth, 11, Math.max(progressTrackWidth - 11, 11))
+    : 11;
+  const isStartingPlayback = isLoading && !sound;
+  const hasQueue = queue.length > 1;
+  const artistLabel = currentTrack.artist || 'Unknown artist';
+  const headerLabel = artistLabel.toUpperCase();
+  const canSkipPrevious = hasQueue || progress > 4;
+  const canSkipNext = hasQueue;
+
+  const handleSeek = async (event: GestureResponderEvent) => {
+    if (!safeDuration || progressTrackWidth <= 0) {
+      return;
+    }
+
+    const nextRatio = clamp(event.nativeEvent.locationX / progressTrackWidth, 0, 1);
+    await seekTo(nextRatio * safeDuration);
+  };
+
+  const handleTrackLayout = (event: LayoutChangeEvent) => {
+    setProgressTrackWidth(event.nativeEvent.layout.width);
+  };
+
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right', 'bottom']}>
       <StatusBar barStyle="dark-content" backgroundColor={playerPalette.screen} />
@@ -144,9 +210,7 @@ const PlayerScreen = () => {
           styles.content,
           {
             opacity: fade,
-            transform: [
-              { translateY: Animated.add(lift, dragY) },
-            ],
+            transform: [{ translateY: Animated.add(lift, dragY) }],
           },
         ]}
         {...panResponder.panHandlers}
@@ -160,7 +224,9 @@ const PlayerScreen = () => {
             <ChevronDown size={19} color={playerPalette.textMuted} strokeWidth={2.3} />
           </TouchableOpacity>
 
-          <Text style={styles.albumLabel}>{mockPlayerTrack.album}</Text>
+          <Text style={styles.albumLabel} numberOfLines={1}>
+            {headerLabel}
+          </Text>
 
           <TouchableOpacity activeOpacity={0.85} style={styles.headerButton}>
             <MoreVertical size={18} color={playerPalette.textMuted} strokeWidth={2.1} />
@@ -175,22 +241,34 @@ const PlayerScreen = () => {
             },
           ]}
         >
-          <Image source={mockPlayerTrack.artwork} style={styles.artwork} />
+          <Image source={getArtworkSource(currentTrack.thumbnail)} style={styles.artwork} />
         </Animated.View>
 
         <View style={styles.textBlock}>
-          <Text style={styles.trackTitle}>{mockPlayerTrack.title}</Text>
-          <Text style={styles.trackArtist}>{mockPlayerTrack.artist}</Text>
+          <Text style={styles.trackTitle} numberOfLines={1}>
+            {currentTrack.title}
+          </Text>
+          <Text style={styles.trackArtist} numberOfLines={1}>
+            {artistLabel}
+          </Text>
         </View>
 
         <View style={styles.progressSection}>
-          <View style={styles.progressTrack}>
-            <View style={[styles.progressFill, { width: `${mockPlayerTrack.progress * 100}%` }]} />
-            <View style={[styles.progressThumb, { left: `${mockPlayerTrack.progress * 100}%` }]} />
-          </View>
+          <TouchableOpacity
+            activeOpacity={0.95}
+            style={styles.progressTrack}
+            onLayout={handleTrackLayout}
+            onPress={(event) => {
+              void handleSeek(event);
+            }}
+          >
+            <View style={styles.progressTrackBase} />
+            <View style={[styles.progressFill, { width: `${progressRatio * 100}%` }]} />
+            <View style={[styles.progressThumb, { left: progressThumbOffset }]} />
+          </TouchableOpacity>
           <View style={styles.timeRow}>
-            <Text style={styles.timeText}>{mockPlayerTrack.elapsedLabel}</Text>
-            <Text style={styles.timeText}>{mockPlayerTrack.durationLabel}</Text>
+            <Text style={styles.timeText}>{formatTime(progress)}</Text>
+            <Text style={styles.timeText}>{formatTime(safeDuration)}</Text>
           </View>
         </View>
 
@@ -208,27 +286,62 @@ const PlayerScreen = () => {
               <Shuffle size={20} color={playerPalette.textMuted} strokeWidth={2.2} />
             </TouchableOpacity>
 
-            <TouchableOpacity activeOpacity={0.82} style={[styles.controlButton, styles.leftControl]}>
+            <TouchableOpacity
+              activeOpacity={0.82}
+              style={[
+                styles.controlButton,
+                styles.leftControl,
+                (!canSkipPrevious || isStartingPlayback) && styles.controlButtonDisabled,
+              ]}
+              onPress={() => {
+                void skipPrevious();
+              }}
+              disabled={!canSkipPrevious || isStartingPlayback}
+            >
               <SkipBack size={20} color={playerPalette.textMuted} fill={playerPalette.textMuted} strokeWidth={1.8} />
             </TouchableOpacity>
 
-            <TouchableOpacity activeOpacity={0.82} style={[styles.controlButton, styles.rightControl]}>
+            <TouchableOpacity
+              activeOpacity={0.82}
+              style={[
+                styles.controlButton,
+                styles.rightControl,
+                (!canSkipNext || isStartingPlayback) && styles.controlButtonDisabled,
+              ]}
+              onPress={() => {
+                void skipNext();
+              }}
+              disabled={!canSkipNext || isStartingPlayback}
+            >
               <SkipForward size={20} color={playerPalette.textMuted} fill={playerPalette.textMuted} strokeWidth={1.8} />
             </TouchableOpacity>
 
             <TouchableOpacity
               activeOpacity={0.88}
-              style={[styles.controlButton, styles.bottomControl]}
-              onPress={() => setIsPlaying((value) => !value)}
+              style={[
+                styles.controlButton,
+                styles.bottomControl,
+                isStartingPlayback && styles.controlButtonDisabled,
+              ]}
+              onPress={() => {
+                void togglePlayback();
+              }}
+              disabled={isStartingPlayback}
             >
-              {isPlaying ? (
+              {isStartingPlayback ? (
+                <ActivityIndicator color={playerPalette.textMuted} size="small" />
+              ) : isPlaying ? (
                 <Pause size={24} color={playerPalette.textMuted} strokeWidth={2.2} />
               ) : (
                 <Play size={24} color={playerPalette.textMuted} fill={playerPalette.textMuted} strokeWidth={2.2} />
               )}
             </TouchableOpacity>
 
-            <View style={styles.controlWheelCenter} />
+            <View style={styles.controlWheelCenter}>
+              <Text style={styles.queueIndex}>
+                {currentIndex >= 0 ? `${currentIndex + 1}` : '1'}
+              </Text>
+            </View>
           </View>
         </Animated.View>
       </Animated.View>
@@ -260,10 +373,13 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   albumLabel: {
+    flex: 1,
+    marginHorizontal: 12,
     color: playerPalette.textMuted,
     fontSize: 11,
     fontWeight: '700',
     letterSpacing: 1.9,
+    textAlign: 'center',
     textTransform: 'uppercase',
   },
   artworkShell: {
@@ -282,6 +398,7 @@ const styles = StyleSheet.create({
     width: 248,
     height: 248,
     borderRadius: 24,
+    backgroundColor: 'rgba(216, 204, 184, 0.22)',
   },
   textBlock: {
     alignItems: 'center',
@@ -304,11 +421,17 @@ const styles = StyleSheet.create({
     paddingHorizontal: 2,
   },
   progressTrack: {
+    height: 24,
+    justifyContent: 'center',
+    overflow: 'visible',
+  },
+  progressTrackBase: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
     height: 6,
     borderRadius: 999,
     backgroundColor: 'rgba(192, 180, 160, 0.54)',
-    overflow: 'visible',
-    justifyContent: 'center',
   },
   progressFill: {
     height: 4,
@@ -317,6 +440,7 @@ const styles = StyleSheet.create({
   },
   progressThumb: {
     position: 'absolute',
+    top: 1,
     marginLeft: -11,
     width: 22,
     height: 22,
@@ -383,6 +507,13 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.16,
     shadowRadius: 14,
     elevation: 5,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  queueIndex: {
+    color: playerPalette.text,
+    fontSize: 14,
+    fontWeight: '700',
   },
   controlButton: {
     position: 'absolute',
@@ -390,6 +521,9 @@ const styles = StyleSheet.create({
     height: 52,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  controlButtonDisabled: {
+    opacity: 0.55,
   },
   topControl: {
     top: 5,

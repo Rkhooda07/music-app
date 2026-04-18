@@ -15,6 +15,7 @@ interface PlayerState {
   duration: number;
   sound: Audio.Sound | null;
   error: string | null;
+  isSeeking: boolean;
   playTrack: (track: MusicTrack, queue?: MusicTrack[]) => Promise<void>;
   togglePlayback: () => Promise<void>;
   seekTo: (value: number) => Promise<void>;
@@ -67,6 +68,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
   duration: 0,
   sound: null,
   error: null,
+  isSeeking: false,
   clearError: () => set({ error: null }),
   playTrack: async (track, queue) => {
     const playbackRequest = ++latestPlaybackRequest;
@@ -137,7 +139,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
 
         set({
           isPlaying: playbackStatus.isPlaying,
-          progress: playbackStatus.positionMillis / 1000,
+          progress: get().isSeeking ? get().progress : playbackStatus.positionMillis / 1000,
           duration: (playbackStatus.durationMillis ?? 0) / 1000 || track.duration || 0,
           isLoading: false,
           isBuffering: playbackStatus.isBuffering,
@@ -179,17 +181,26 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
     }
   },
   togglePlayback: async () => {
-    const { sound, isPlaying } = get();
-    if (!sound) {
+    const { sound, isPlaying, isLoading } = get();
+    if (!sound || isLoading) {
       return;
     }
 
-    if (isPlaying) {
-      await sound.pauseAsync();
-      return;
-    }
+    try {
+      if (isPlaying) {
+        set({ isPlaying: false });
+        await sound.pauseAsync();
+        return;
+      }
 
-    await sound.playAsync();
+      set({ isPlaying: true });
+      await sound.playAsync();
+    } catch (error) {
+      set({
+        isPlaying,
+        error: error instanceof Error ? error.message : 'Unable to update playback',
+      });
+    }
   },
   seekTo: async (value) => {
     const { sound } = get();
@@ -197,12 +208,17 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
       return;
     }
 
-    await sound.setPositionAsync(value * 1000);
-    set({ progress: value });
+    set({ progress: value, isSeeking: true });
+
+    try {
+      await sound.setPositionAsync(value * 1000);
+    } finally {
+      set({ isSeeking: false });
+    }
   },
   skipNext: async () => {
-    const { queue, currentIndex, playTrack, currentTrack } = get();
-    if (queue.length === 0) {
+    const { queue, currentIndex, playTrack, currentTrack, isLoading } = get();
+    if (queue.length === 0 || isLoading) {
       return;
     }
 
@@ -211,8 +227,8 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
     await playTrack(queue[nextIndex], queue);
   },
   skipPrevious: async () => {
-    const { queue, currentIndex, progress, seekTo, playTrack, currentTrack } = get();
-    if (queue.length === 0) {
+    const { queue, currentIndex, progress, seekTo, playTrack, currentTrack, isLoading } = get();
+    if (queue.length === 0 || isLoading) {
       return;
     }
 
