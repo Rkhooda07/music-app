@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Animated,
@@ -66,7 +66,7 @@ export const MiniPlayer = () => {
       style={[
         styles.wrapper,
         {
-          bottom: Math.max(insets.bottom, 10) + 12,
+          bottom: Math.max(insets.bottom, 10) + 12 + 76, // Extra space for navbar
           opacity,
           transform: [{ translateY }],
         },
@@ -103,7 +103,12 @@ export const MiniPlayer = () => {
             ) : isPlaying ? (
               <Pause color={playerPalette.text} size={18} strokeWidth={2.2} />
             ) : (
-              <Play color={playerPalette.text} size={18} fill={playerPalette.text} strokeWidth={2.2} />
+              <Play
+                color={playerPalette.text}
+                size={18}
+                fill={playerPalette.text}
+                strokeWidth={2.2}
+              />
             )}
           </TouchableOpacity>
         </View>

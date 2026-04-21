@@ -24,7 +24,8 @@ import {
 } from 'lucide-react-native';
 import { API_BASE_URL, searchMusic } from '../api/music';
 import { MiniPlayer } from '../components/MiniPlayer';
-import { playerPalette } from '../constants/mockPlayer';
+import { BottomNavBar } from '../components/BottomNavBar';
+import { playerPalette, fallbackTracks } from '../constants/mockPlayer';
 import { RootStackParamList } from '../navigation/types';
 import { usePlayerStore } from '../store/player.store';
 import { useUserStore } from '../store/user.store';
@@ -76,12 +77,22 @@ const HomeScreen = () => {
   const feeling = useUserStore((s) => s.feeling);
   const [searchQuery, setSearchQuery] = useState('');
   const [debouncedQuery, setDebouncedQuery] = useState('');
+  const [isReady, setIsReady] = useState(false); // Don't fetch on initial mount
   const playTrack = usePlayerStore((s) => s.playTrack);
   const currentTrack = usePlayerStore((s) => s.currentTrack);
   const isPlaying = usePlayerStore((s) => s.isPlaying);
   const loadingTrackId = usePlayerStore((s) => s.loadingTrackId);
   const playerError = usePlayerStore((s) => s.error);
   const clearPlayerError = usePlayerStore((s) => s.clearError);
+
+  // Allow initial render with fallback data, then enable fetching after a short delay
+  useEffect(() => {
+    const timeout = setTimeout(() => {
+      setIsReady(true);
+    }, 800);
+
+    return () => clearTimeout(timeout);
+  }, []);
 
   useEffect(() => {
     const timeout = setTimeout(() => {
@@ -106,13 +117,19 @@ const HomeScreen = () => {
   const searchResults = useQuery({
     queryKey: ['music-search', activeQuery],
     queryFn: ({ signal }) => searchMusic(activeQuery, signal),
-    enabled: activeQuery.length > 0,
+    enabled: isReady && activeQuery.length > 0, // Only fetch after component is ready
     retry: 0,
     staleTime: 1000 * 60 * 5,
     gcTime: 1000 * 60 * 10,
   });
 
-  const topTracks = useMemo(() => searchResults.data || [], [searchResults.data]);
+  const topTracks = useMemo(() => {
+    // Use fallback tracks if backend is unavailable
+    if (searchResults.isError) {
+      return fallbackTracks;
+    }
+    return searchResults.data || [];
+  }, [searchResults.data, searchResults.isError]);
 
   const handleTrackPress = async (track: MusicTrack) => {
     clearPlayerError();
@@ -194,9 +211,25 @@ const HomeScreen = () => {
 
           {searchResults.isError ? (
             <View style={styles.emptyState}>
-              <Text style={styles.emptyTitle}>Couldn’t load songs</Text>
-              <Text style={styles.emptyText}>Backend unreachable from this device.</Text>
-              <Text style={styles.endpointText}>{API_BASE_URL}</Text>
+              <Text style={styles.emptyTitle}>Connection Issue</Text>
+              <Text style={styles.emptyText}>
+                Cannot reach backend server. Make sure:
+              </Text>
+              <Text style={styles.emptyText}>
+                • Backend is running on port 3000{'\n'}
+                • Your IP in .env matches your device network{'\n'}
+                • Phone and backend are on same WiFi
+              </Text>
+              <Text style={[styles.endpointText, styles.endpointWarning]}>
+                Configured: {API_BASE_URL}
+              </Text>
+              <TouchableOpacity
+                style={styles.retryButton}
+                onPress={() => searchResults.refetch()}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.retryButtonText}>Try Again</Text>
+              </TouchableOpacity>
             </View>
           ) : null}
 
@@ -259,6 +292,7 @@ const HomeScreen = () => {
       </ScrollView>
 
       <MiniPlayer />
+      <BottomNavBar />
     </SafeAreaView>
   );
 };
@@ -272,7 +306,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    paddingBottom: 126,
+    paddingBottom: 160,
   },
   header: {
     paddingHorizontal: 22,
@@ -503,6 +537,34 @@ const styles = StyleSheet.create({
     color: '#9d8667',
     fontSize: 12,
     marginTop: 8,
+  },
+  endpointWarning: {
+    backgroundColor: 'rgba(255, 193, 7, 0.1)',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    marginTop: 10,
+    borderLeftWidth: 3,
+    borderLeftColor: '#ffc107',
+  },
+  retryButton: {
+    marginTop: 12,
+    paddingHorizontal: 18,
+    paddingVertical: 10,
+    borderRadius: 12,
+    backgroundColor: '#8f826d',
+    alignSelf: 'flex-start',
+    shadowColor: '#756754',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 6,
+    elevation: 3,
+  },
+  retryButtonText: {
+    color: '#fcf9f1',
+    fontSize: 13,
+    fontWeight: '600',
+    letterSpacing: 0.3,
   },
   errorStrip: {
     marginTop: 16,

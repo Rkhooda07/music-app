@@ -337,11 +337,7 @@ const PlayerScreen = () => {
               )}
             </TouchableOpacity>
 
-            <View style={styles.controlWheelCenter}>
-              <Text style={styles.queueIndex}>
-                {currentIndex >= 0 ? `${currentIndex + 1}` : '1'}
-              </Text>
-            </View>
+
           </View>
         </Animated.View>
       </Animated.View>
@@ -495,26 +491,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  controlWheelCenter: {
-    width: 68,
-    height: 68,
-    borderRadius: 34,
-    backgroundColor: playerPalette.screen,
-    borderWidth: 1,
-    borderColor: 'rgba(223, 211, 190, 0.95)',
-    shadowColor: playerPalette.shadow,
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.16,
-    shadowRadius: 14,
-    elevation: 5,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  queueIndex: {
-    color: playerPalette.text,
-    fontSize: 14,
-    fontWeight: '700',
-  },
+
   controlButton: {
     position: 'absolute',
     width: 52,
