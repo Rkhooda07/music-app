@@ -282,6 +282,7 @@ const PlayerScreen = () => {
         >
           <View style={styles.controlWheelShadow} />
           <View style={styles.controlWheel}>
+            <View style={styles.centerWheel} />
             <TouchableOpacity activeOpacity={0.82} style={[styles.controlButton, styles.topControl]}>
               <Shuffle size={20} color={playerPalette.textMuted} strokeWidth={2.2} />
             </TouchableOpacity>
@@ -490,6 +491,14 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(224, 212, 194, 0.96)',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  centerWheel: {
+    width: 76,
+    height: 76,
+    borderRadius: 38,
+    backgroundColor: '#e8dfceff',
+    borderWidth: 1,
+    borderColor: 'rgba(224, 212, 194, 0.96)',
   },
 
   controlButton: {
