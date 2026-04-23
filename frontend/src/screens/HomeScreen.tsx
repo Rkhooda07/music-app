@@ -144,7 +144,7 @@ const HomeScreen = () => {
         <TouchableOpacity
           activeOpacity={0.86}
           style={styles.headerIconButton}
-          onPress={() => navigation.goBack()}
+          onPress={() => navigation.navigate('Greeting')}
         >
           <ChevronLeft size={18} color="#b4a48f" />
         </TouchableOpacity>

@@ -65,7 +65,7 @@ const PlayerScreen = () => {
   const lift = useRef(new Animated.Value(18)).current;
   const artworkFloat = useRef(new Animated.Value(0)).current;
   const wheelScale = useRef(new Animated.Value(0.92)).current;
-  const dragY = useRef(new Animated.Value(0)).current;
+  const dragY = useRef(new Animated.Value(SCREEN_HEIGHT)).current;
   const [progressTrackWidth, setProgressTrackWidth] = useState(0);
 
   const dismissPlayer = () => {
@@ -139,6 +139,13 @@ const PlayerScreen = () => {
         damping: 15,
         stiffness: 140,
         mass: 0.9,
+        useNativeDriver: true,
+      }),
+      Animated.spring(dragY, {
+        toValue: 0,
+        damping: 20,
+        stiffness: 120,
+        mass: 1,
         useNativeDriver: true,
       }),
     ]).start();
