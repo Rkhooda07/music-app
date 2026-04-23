@@ -49,7 +49,7 @@ export const BottomNavBar = () => {
     {
       label: 'Search',
       icon: <Search size={24} color="#b7a89a" strokeWidth={2} />,
-      onPress: () => {},
+      onPress: () => navigation.navigate('Search'),
     },
     {
       label: 'Library',
