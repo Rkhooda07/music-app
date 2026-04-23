@@ -138,7 +138,7 @@ const HomeScreen = () => {
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right', 'bottom']}>
-      <StatusBar barStyle="dark-content" backgroundColor="#f4eee3" />
+      <StatusBar barStyle="dark-content" backgroundColor="transparent" translucent />
 
       <View style={styles.header}>
         <TouchableOpacity

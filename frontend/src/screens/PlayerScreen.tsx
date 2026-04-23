@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Animated,
+  Dimensions,
   Easing,
   Image,
   PanResponder,
@@ -27,6 +28,8 @@ import {
 import { fallbackArtwork, playerPalette } from '../constants/mockPlayer';
 import { RootStackParamList } from '../navigation/types';
 import { usePlayerStore } from '../store/player.store';
+
+const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 const formatTime = (value: number) => {
   if (!Number.isFinite(value) || value < 0) {
@@ -69,19 +72,17 @@ const PlayerScreen = () => {
     Animated.parallel([
       Animated.timing(fade, {
         toValue: 0,
-        duration: 180,
+        duration: 220,
         useNativeDriver: true,
       }),
       Animated.timing(dragY, {
-        toValue: 420,
-        duration: 220,
+        toValue: SCREEN_HEIGHT + 100,
+        duration: 280,
         easing: Easing.out(Easing.cubic),
         useNativeDriver: true,
       }),
     ]).start(() => {
       navigation.goBack();
-      dragY.setValue(0);
-      fade.setValue(1);
     });
   };
 
@@ -101,8 +102,8 @@ const PlayerScreen = () => {
         Animated.spring(dragY, {
           toValue: 0,
           damping: 18,
-          stiffness: 180,
-          mass: 0.9,
+          stiffness: 200,
+          mass: 0.85,
           useNativeDriver: true,
         }).start();
       },
@@ -110,8 +111,8 @@ const PlayerScreen = () => {
         Animated.spring(dragY, {
           toValue: 0,
           damping: 18,
-          stiffness: 180,
-          mass: 0.9,
+          stiffness: 200,
+          mass: 0.85,
           useNativeDriver: true,
         }).start();
       },
@@ -203,7 +204,7 @@ const PlayerScreen = () => {
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right', 'bottom']}>
-      <StatusBar barStyle="dark-content" backgroundColor={playerPalette.screen} />
+      <StatusBar barStyle="dark-content" backgroundColor="transparent" translucent />
 
       <Animated.View
         style={[
