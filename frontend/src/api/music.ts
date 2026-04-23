@@ -1,4 +1,5 @@
 import { NativeModules, Platform } from 'react-native';
+import Constants from 'expo-constants';
 import { MusicTrack } from '../types/music';
 
 const API_PATH = '/api/music';
@@ -6,19 +7,51 @@ const REQUEST_TIMEOUT = 8000; // 8 seconds
 const MAX_RETRIES = 2;
 
 /**
+ * Checks if a hostname is a local or private network address
+ */
+const isLocalOrPrivateHost = (hostname: string) => {
+  return (
+    hostname === 'localhost' ||
+    hostname === '127.0.0.1' ||
+    hostname === '10.0.2.2' || // Android Emulator loopback
+    // Private IP ranges
+    /^192\.168\./.test(hostname) ||
+    /^10\./.test(hostname) ||
+    /^172\.(1[6-9]|2[0-9]|3[0-1])\./.test(hostname) ||
+    hostname.endsWith('.local')
+  );
+};
+
+/**
  * Get the dev server host from the Metro bundler
+ * This is the most reliable way to find the IP of the machine running the backend
  */
 const getDevServerHost = () => {
+  // 1. Try scriptURL (works on both iOS and Android)
   const scriptURL = NativeModules.SourceCode?.scriptURL;
-  if (!scriptURL) {
-    return null;
+  if (scriptURL) {
+    try {
+      const url = new URL(scriptURL);
+      if (url.hostname && url.hostname !== 'localhost' && url.hostname !== '127.0.0.1') {
+        return url.hostname;
+      }
+    } catch (e) {
+      // Ignore URL parsing errors
+    }
   }
 
-  try {
-    return new URL(scriptURL).hostname;
-  } catch {
-    return null;
+  // 2. Try Expo Constants (legacy and modern fields)
+  const debuggerHost =
+    Constants.expoConfig?.hostUri?.split(':')[0] ||
+    Constants.manifest?.debuggerHost?.split(':')[0] ||
+    (Constants.manifest2 as any)?.debuggerHost?.split(':')[0] ||
+    Constants.expoGo?.debuggerHost?.split(':')[0];
+
+  if (debuggerHost && debuggerHost !== 'localhost' && debuggerHost !== '127.0.0.1') {
+    return debuggerHost;
   }
+
+  return null;
 };
 
 /**
@@ -30,49 +63,56 @@ const withApiPath = (value: string) => {
 };
 
 /**
- * Check if this is a local dev URL that needs rewriting
- */
-const shouldSwapToDevHost = (value: string) => {
-  try {
-    const host = new URL(value).hostname;
-    return host === 'localhost' || host === '127.0.0.1' || host === '10.0.2.2';
-  } catch {
-    return false;
-  }
-};
-
-/**
  * Resolve the API base URL with proper configuration
  */
 const resolveApiBaseUrl = () => {
-  if (process.env.EXPO_PUBLIC_API_URL) {
-    const configuredUrl = withApiPath(process.env.EXPO_PUBLIC_API_URL);
-    const devServerHost = getDevServerHost();
+  const devServerHost = getDevServerHost();
+  const envUrl = process.env.EXPO_PUBLIC_API_URL;
 
-    if (devServerHost && shouldSwapToDevHost(configuredUrl)) {
-      try {
-        const rewrittenUrl = new URL(configuredUrl);
-        rewrittenUrl.hostname = devServerHost;
-        return withApiPath(rewrittenUrl.toString());
-      } catch {
-        return configuredUrl;
+  // If we have a configured URL in .env
+  if (envUrl) {
+    const configuredUrl = withApiPath(envUrl);
+    
+    try {
+      const parsedConfig = new URL(configuredUrl);
+      const configHostname = parsedConfig.hostname;
+
+      // If the configured host is local/private AND we found a different dev server host,
+      // we should prefer the dev server host because it's the current active IP.
+      if (devServerHost && isLocalOrPrivateHost(configHostname) && configHostname !== devServerHost) {
+        parsedConfig.hostname = devServerHost;
+        const finalUrl = withApiPath(parsedConfig.toString());
+        
+        if (__DEV__) {
+          console.log(`[API Config] 🔄 Auto-detected machine IP change: Swapping ${configHostname} -> ${devServerHost}`);
+        }
+        return finalUrl;
       }
+    } catch (e) {
+      // If .env URL is invalid, fallback
     }
 
     return configuredUrl;
   }
 
-  const devServerHost = getDevServerHost();
+  // Fallback 1: Use detected dev server host
   if (devServerHost) {
+    if (__DEV__) {
+      console.log(`[API Config] 📡 Using detected dev server host: ${devServerHost}`);
+    }
     return `http://${devServerHost}:3000${API_PATH}`;
   }
 
-  return (
-    Platform.select({
-      android: `http://10.0.2.2:3000${API_PATH}`,
-      default: `http://localhost:3000${API_PATH}`,
-    }) || `http://localhost:3000${API_PATH}`
-  );
+  // Fallback 2: Platform defaults
+  const fallback = Platform.select({
+    android: `http://10.0.2.2:3000${API_PATH}`,
+    default: `http://localhost:3000${API_PATH}`,
+  }) || `http://localhost:3000${API_PATH}`;
+
+  if (__DEV__) {
+    console.warn(`[API Config] ⚠️ No host detected, using fallback: ${fallback}`);
+  }
+  return fallback;
 };
 
 export const API_BASE_URL = resolveApiBaseUrl();

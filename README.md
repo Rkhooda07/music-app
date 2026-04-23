@@ -17,8 +17,8 @@ The core application, built with a modern stack for a fast and fluid music exper
 - **Navigation**: [React Navigation](https://reactnavigation.org/) (Seamless screen transitions)
 
 ### 2. [Backend (Server)](./backend)
-The server-side logic (to be implemented) that will provide song metadata and streamable links.
-- **Current Status**: Initialized as a Node.js project, waiting for implementation.
+The server-side logic that provides song metadata and streamable links.
+- **Current Status**: Implemented with Express, supports searching and stream URL extraction.
 
 ---
 

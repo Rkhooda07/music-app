@@ -2,36 +2,24 @@
 
 ## Quick Setup
 
-### Step 1: Find Your Machine's Local IP Address
+### 🔄 Automatic Network Configuration (New!)
+The app now automatically detects your laptop's IP address when running in development. 
+- You no longer need to manually update `.env` every time your IP changes.
+- It "just works" on your phone as long as you are on the same Wi-Fi.
+- It swaps `localhost` or old IPs with your current machine's IP dynamically.
 
-**macOS:**
-```bash
-ipconfig getifaddr en0
-```
-Output example: `192.168.0.207`
+### Step 1: Find Your Machine's Local IP Address (Optional)
+If you ever need to set it manually, run:
+**macOS:** `ipconfig getifaddr en0`
+**Windows:** `ipconfig`
+**Linux:** `hostname -I`
 
-**Windows:**
-```bash
-ipconfig
+### Step 2: Configuration
+The `frontend/.env` contains the API URL:
 ```
-Look for "IPv4 Address" under your network adapter (usually 192.168.x.x)
-
-**Linux:**
-```bash
-hostname -I
+EXPO_PUBLIC_API_URL=http://localhost:3000
 ```
-
-### Step 2: Update Frontend Configuration
-
-Edit `frontend/.env`:
-```
-EXPO_PUBLIC_API_URL=http://YOUR_IP_HERE:3000
-```
-
-Example:
-```
-EXPO_PUBLIC_API_URL=http://192.168.0.207:3000
-```
+*Note: The app will automatically replace `localhost` with your machine's IP when running on a phone.*
 
 **IMPORTANT:** 
 - ✅ Use `http://` (not https)
