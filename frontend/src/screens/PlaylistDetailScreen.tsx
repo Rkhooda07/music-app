@@ -18,6 +18,7 @@ import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { ChevronLeft, Edit3, Plus, Search, Trash2 } from 'lucide-react-native';
 import { API_BASE_URL, searchMusic } from '../api/music';
+import { cachePlaylist, cachePlaylistTrack } from '../api/playlist';
 import { MiniPlayer } from '../components/MiniPlayer';
 import { BottomNavBar } from '../components/BottomNavBar';
 import { RootStackParamList } from '../navigation/types';
@@ -43,6 +44,8 @@ const PlaylistDetailScreen = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [debouncedQuery, setDebouncedQuery] = useState('');
   const [showSearch, setShowSearch] = useState(false);
+  const [isCaching, setIsCaching] = useState(false);
+  const [cacheMessage, setCacheMessage] = useState('');
 
   useEffect(() => {
     const timeout = setTimeout(() => {
@@ -51,6 +54,41 @@ const PlaylistDetailScreen = () => {
 
     return () => clearTimeout(timeout);
   }, [searchQuery]);
+
+  useEffect(() => {
+    if (!playlist || playlist.tracks.length === 0) {
+      setCacheMessage('');
+      setIsCaching(false);
+      return;
+    }
+
+    let active = true;
+    setIsCaching(true);
+    setCacheMessage('Caching playlist tracks for faster playback...');
+
+    cachePlaylist(playlistId, playlist.tracks.map((track) => track.id))
+      .then(() => {
+        if (!active) {
+          return;
+        }
+        setCacheMessage('Playlist ready for instant playback');
+      })
+      .catch(() => {
+        if (!active) {
+          return;
+        }
+        setCacheMessage('Playlist caching is unavailable right now');
+      })
+      .finally(() => {
+        if (active) {
+          setIsCaching(false);
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [playlistId, playlist?.tracks]);
 
   const searchResults = useQuery({
     queryKey: ['playlist-search', debouncedQuery],
@@ -67,6 +105,10 @@ const PlaylistDetailScreen = () => {
     addTrackToPlaylist(playlistId, track);
     setSearchQuery('');
     setDebouncedQuery('');
+
+    void cachePlaylistTrack(playlistId, track.id).catch(() => {
+      // Best-effort caching; do not interrupt the user.
+    });
   };
 
   const handleTrackPress = async (track: MusicTrack) => {
@@ -154,6 +196,7 @@ const PlaylistDetailScreen = () => {
         <View style={styles.headerText}>
           <Text style={styles.title}>{playlist.title}</Text>
           <Text style={styles.subtitle}>{playlistCount} song{playlistCount !== 1 ? 's' : ''}</Text>
+          {cacheMessage ? <Text style={styles.cacheMessage}>{cacheMessage}</Text> : null}
         </View>
       </View>
 
@@ -332,6 +375,11 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#8b7f6e',
     marginTop: 4,
+  },
+  cacheMessage: {
+    marginTop: 4,
+    fontSize: 12,
+    color: '#5f5a4d',
   },
   coverSection: {
     marginHorizontal: 24,

@@ -3,6 +3,7 @@ import { Readable } from 'stream';
 import { pipeline } from 'stream/promises';
 import { MusicSearchResult } from '../services/musicTypes';
 import { resolveStreamDescriptor, warmTopSearchResults } from '../services/streamService';
+import { cachePlaylistTracks, cachePlaylistTrack as cachePlaylistTrackService } from '../services/playlistCacheService';
 import { YouTubeDataApiError, searchYouTubeWithDataApi } from '../services/youtubeDataApiService';
 import { getAudioStreamDescriptor, listFormats as listYtDlpFormats, searchYouTube } from '../services/ytDlpService';
 import logger from '../utils/logger';
@@ -185,6 +186,46 @@ export const streamAudio = async (req: Request, res: Response, next: NextFunctio
       return;
     }
 
+    next(error);
+  }
+};
+
+export const cachePlaylist = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { playlistId } = req.params;
+    const { trackIds } = req.body as { trackIds?: string[] };
+
+    if (!playlistId || typeof playlistId !== 'string') {
+      return res.status(400).json({ error: 'Playlist ID is required' });
+    }
+
+    if (!Array.isArray(trackIds) || trackIds.some((id) => typeof id !== 'string' || !id.trim())) {
+      return res.status(400).json({ error: 'trackIds must be a non-empty array of strings' });
+    }
+
+    await cachePlaylistTracks(playlistId, trackIds);
+    res.status(200).json({ message: 'Playlist tracks cached' });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const cachePlaylistTrackHandler = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { playlistId } = req.params;
+    const { trackId } = req.body as { trackId?: string };
+
+    if (!playlistId || typeof playlistId !== 'string') {
+      return res.status(400).json({ error: 'Playlist ID is required' });
+    }
+
+    if (!trackId || typeof trackId !== 'string') {
+      return res.status(400).json({ error: 'trackId is required' });
+    }
+
+    await cachePlaylistTrackService(playlistId, trackId);
+    res.status(200).json({ message: 'Track cached for playlist' });
+  } catch (error) {
     next(error);
   }
 };

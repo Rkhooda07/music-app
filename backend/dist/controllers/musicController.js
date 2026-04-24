@@ -3,10 +3,11 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.listFormats = exports.streamAudio = exports.getStreamUrl = exports.searchMusic = void 0;
+exports.listFormats = exports.cachePlaylistTrackHandler = exports.cachePlaylist = exports.streamAudio = exports.getStreamUrl = exports.searchMusic = void 0;
 const stream_1 = require("stream");
 const promises_1 = require("stream/promises");
 const streamService_1 = require("../services/streamService");
+const playlistCacheService_1 = require("../services/playlistCacheService");
 const youtubeDataApiService_1 = require("../services/youtubeDataApiService");
 const ytDlpService_1 = require("../services/ytDlpService");
 const logger_1 = __importDefault(require("../utils/logger"));
@@ -67,7 +68,10 @@ const getStreamUrl = async (req, res, next) => {
         if (!videoId || typeof videoId !== 'string') {
             return res.status(400).json({ error: 'Video ID is required' });
         }
-        const streamDescriptor = await (0, streamService_1.resolveStreamDescriptor)(videoId, 'play');
+        const quality = req.query.quality === 'low' ? 'low' : 'best';
+        const streamDescriptor = quality === 'low'
+            ? await (0, ytDlpService_1.getAudioStreamDescriptor)(videoId, 'low')
+            : await (0, streamService_1.resolveStreamDescriptor)(videoId, 'play');
         res.json({ url: streamDescriptor.url });
     }
     catch (error) {
@@ -81,7 +85,10 @@ const streamAudio = async (req, res, next) => {
         if (!videoId || typeof videoId !== 'string') {
             return res.status(400).json({ error: 'Video ID is required' });
         }
-        const streamDescriptor = await (0, streamService_1.resolveStreamDescriptor)(videoId, 'play');
+        const quality = req.query.quality === 'low' ? 'low' : 'best';
+        const streamDescriptor = quality === 'low'
+            ? await (0, ytDlpService_1.getAudioStreamDescriptor)(videoId, 'low')
+            : await (0, streamService_1.resolveStreamDescriptor)(videoId, 'play');
         const abortController = new AbortController();
         const forwardedHeaders = {
             ...streamDescriptor.httpHeaders,
@@ -124,20 +131,72 @@ const streamAudio = async (req, res, next) => {
                 return;
             }
             const bodyStream = stream_1.Readable.fromWeb(upstreamResponse.body);
-            await (0, promises_1.pipeline)(bodyStream, res);
+            try {
+                await (0, promises_1.pipeline)(bodyStream, res);
+            }
+            catch (pipelineError) {
+                if (pipelineError instanceof Error &&
+                    (pipelineError.name === 'AbortError' || pipelineError.message.includes('Premature close'))) {
+                    return;
+                }
+                if (res.headersSent || req.aborted || res.writableEnded) {
+                    return;
+                }
+                throw pipelineError;
+            }
         }
         finally {
             req.off('close', closeHandler);
         }
     }
     catch (error) {
-        if (error instanceof Error && error.name === 'AbortError') {
+        if (error instanceof Error &&
+            (error.name === 'AbortError' || error.message.includes('Premature close'))) {
+            return;
+        }
+        if (res.headersSent || req.aborted || res.writableEnded) {
             return;
         }
         next(error);
     }
 };
 exports.streamAudio = streamAudio;
+const cachePlaylist = async (req, res, next) => {
+    try {
+        const { playlistId } = req.params;
+        const { trackIds } = req.body;
+        if (!playlistId || typeof playlistId !== 'string') {
+            return res.status(400).json({ error: 'Playlist ID is required' });
+        }
+        if (!Array.isArray(trackIds) || trackIds.some((id) => typeof id !== 'string' || !id.trim())) {
+            return res.status(400).json({ error: 'trackIds must be a non-empty array of strings' });
+        }
+        await (0, playlistCacheService_1.cachePlaylistTracks)(playlistId, trackIds);
+        res.status(200).json({ message: 'Playlist tracks cached' });
+    }
+    catch (error) {
+        next(error);
+    }
+};
+exports.cachePlaylist = cachePlaylist;
+const cachePlaylistTrackHandler = async (req, res, next) => {
+    try {
+        const { playlistId } = req.params;
+        const { trackId } = req.body;
+        if (!playlistId || typeof playlistId !== 'string') {
+            return res.status(400).json({ error: 'Playlist ID is required' });
+        }
+        if (!trackId || typeof trackId !== 'string') {
+            return res.status(400).json({ error: 'trackId is required' });
+        }
+        await (0, playlistCacheService_1.cachePlaylistTrack)(playlistId, trackId);
+        res.status(200).json({ message: 'Track cached for playlist' });
+    }
+    catch (error) {
+        next(error);
+    }
+};
+exports.cachePlaylistTrackHandler = cachePlaylistTrackHandler;
 const listFormats = async (req, res, next) => {
     try {
         const { videoId } = req.params;

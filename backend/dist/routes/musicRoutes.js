@@ -7,4 +7,6 @@ router.get('/search', musicController_1.searchMusic);
 router.get('/url/:videoId', musicController_1.getStreamUrl);
 router.get('/formats/:videoId', musicController_1.listFormats);
 router.get('/stream/:videoId', musicController_1.streamAudio);
+router.post('/cache/playlist/:playlistId', musicController_1.cachePlaylist);
+router.post('/cache/playlist/:playlistId/track', musicController_1.cachePlaylistTrackHandler);
 exports.default = router;

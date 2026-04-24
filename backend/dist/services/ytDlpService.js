@@ -6,7 +6,9 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.getAudioStreamUrl = exports.getAudioStreamDescriptor = exports.searchYouTube = exports.listFormats = void 0;
 const child_process_1 = require("child_process");
 const path_1 = __importDefault(require("path"));
+const util_1 = require("util");
 const logger_1 = __importDefault(require("../utils/logger"));
+const execPromise = (0, util_1.promisify)(child_process_1.exec);
 // Path to the downloaded yt-dlp binary in the backend root
 const ytDlpPath = path_1.default.resolve(__dirname, '../../yt-dlp');
 const buildCookieArgs = () => {
@@ -72,6 +74,95 @@ const parseExpiryFromStreamUrl = (streamUrl) => {
         // Ignore URL parsing errors and use fallback TTL.
     }
     return Date.now() + (30 * 60 * 1000);
+};
+const getYtDlpFormats = async (videoId, client) => {
+    const watchUrl = `https://www.youtube.com/watch?v=${videoId}`;
+    const args = [
+        '--dump-json',
+        '--skip-download',
+        ...buildSharedArgs(),
+        ...(client ? buildExtractorArgs(client) : []),
+        watchUrl,
+    ];
+    const { parsed } = await runYtDlpJson(args);
+    return parsed.formats ?? [];
+};
+const selectPreferredAudioFormat = (formats = [], quality = 'best') => {
+    const usableFormats = formats.filter(isUsableFormat);
+    if (!usableFormats.length) {
+        return undefined;
+    }
+    const audioOnlyFormats = usableFormats.filter((format) => format.acodec !== 'none' && format.vcodec === 'none');
+    if (audioOnlyFormats.length) {
+        const sorted = [...audioOnlyFormats].sort(compareByAudioBitrate);
+        return quality === 'low' ? sorted[sorted.length - 1] : sorted[0];
+    }
+    const combinedWithAudio = usableFormats.filter((format) => format.acodec !== 'none');
+    if (combinedWithAudio.length) {
+        const sorted = [...combinedWithAudio].sort(compareCombinedFormats);
+        return quality === 'low' ? sorted[sorted.length - 1] : sorted[0];
+    }
+    const sorted = [...usableFormats].sort(compareByAudioBitrate);
+    return quality === 'low' ? sorted[sorted.length - 1] : sorted[0];
+};
+const detectBestYtDlpFormat = async (videoId, quality) => {
+    const clients = [undefined, 'ios', 'android', 'web'];
+    let lastError = 'Could not detect a usable format';
+    for (const client of clients) {
+        const clientLabel = client || 'default';
+        try {
+            const formats = await getYtDlpFormats(videoId, client);
+            const selected = selectPreferredAudioFormat(formats, quality);
+            if (selected?.format_id) {
+                logger_1.default.info(`yt-dlp selected format=${selected.format_id} for ${videoId} using ${clientLabel} client`);
+                return { formatId: selected.format_id, client };
+            }
+            logger_1.default.warn(`yt-dlp found no usable audio format for ${videoId} using ${clientLabel} client`);
+        }
+        catch (error) {
+            lastError = error instanceof Error ? error.message : String(error);
+            logger_1.default.warn(`yt-dlp format detection failed for ${videoId} using ${clientLabel} client: ${lastError}`);
+        }
+    }
+    throw new Error(lastError);
+};
+const isValidStreamUrl = (streamUrl) => {
+    try {
+        const url = new URL(streamUrl);
+        return url.protocol === 'http:' || url.protocol === 'https:';
+    }
+    catch {
+        return false;
+    }
+};
+const runOptimizedYtDlp = async (videoId, quality = 'best') => {
+    const watchUrl = `https://www.youtube.com/watch?v=${videoId}`;
+    const detectedFormat = await detectBestYtDlpFormat(videoId, quality);
+    const args = [
+        '-f',
+        detectedFormat.formatId,
+        ...buildSharedArgs(),
+        ...(detectedFormat.client ? buildExtractorArgs(detectedFormat.client) : []),
+        '--get-url',
+        watchUrl,
+    ];
+    try {
+        const { stdout } = await runYtDlpText(args);
+        const url = stdout.trim();
+        if (!isValidStreamUrl(url)) {
+            throw new Error(`Invalid stream URL returned by yt-dlp: ${url}`);
+        }
+        return {
+            url,
+            httpHeaders: {},
+            expiresAt: parseExpiryFromStreamUrl(url),
+        };
+    }
+    catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        logger_1.default.warn(`Optimized yt-dlp fetch failed for ${videoId} using ${detectedFormat.formatId}${detectedFormat.client ? ` (${detectedFormat.client})` : ''}: ${errorMessage}`);
+        throw new Error(errorMessage);
+    }
 };
 const isUsableFormat = (format) => {
     if (!format.url) {
@@ -318,12 +409,21 @@ const searchYouTube = (query) => {
     });
 };
 exports.searchYouTube = searchYouTube;
-const getAudioStreamDescriptor = (videoId) => {
+const getAudioStreamDescriptor = (videoId, quality = 'best') => {
     return new Promise((resolve, reject) => {
-        logger_1.default.info(`Extracting audio descriptor for video ID: ${videoId}`);
+        logger_1.default.info(`Extracting audio descriptor for video ID: ${videoId}${quality === 'low' ? ' (low quality)' : ''}`);
         const attempts = buildExtractionAttempts(videoId);
         (async () => {
             let lastError = 'Failed to extract audio URL';
+            try {
+                const optimizedDescriptor = await runOptimizedYtDlp(videoId, quality);
+                resolve(optimizedDescriptor);
+                return;
+            }
+            catch (error) {
+                lastError = error instanceof Error ? error.message : 'Optimized yt-dlp failed';
+                logger_1.default.warn(`Optimized yt-dlp fetch failed for ${videoId}: ${lastError}`);
+            }
             for (const attempt of attempts) {
                 try {
                     const { parsed } = await runYtDlpJson(attempt.args);

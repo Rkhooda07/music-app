@@ -41,9 +41,10 @@ const getDevServerHost = () => {
   }
 
   // 2. Try Expo Constants (legacy and modern fields)
+  const manifestWithDebuggerHost = Constants.manifest as { debuggerHost?: string } | undefined;
   const debuggerHost =
     Constants.expoConfig?.hostUri?.split(':')[0] ||
-    Constants.manifest?.debuggerHost?.split(':')[0] ||
+    manifestWithDebuggerHost?.debuggerHost?.split(':')[0] ||
     (Constants.manifest2 as any)?.debuggerHost?.split(':')[0] ||
     Constants.expoGo?.debuggerHost?.split(':')[0];
 
