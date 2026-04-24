@@ -7,7 +7,6 @@ import {
   ScrollView,
   Text,
   ActivityIndicator,
-  Animated,
   Keyboard,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -29,7 +28,6 @@ const SearchScreen = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [debouncedQuery, setDebouncedQuery] = useState('');
   const searchInputRef = useRef<TextInput>(null);
-  const fadeAnim = useRef(new Animated.Value(0)).current;
   const playTrack = usePlayerStore((s) => s.playTrack);
   const currentTrack = usePlayerStore((s) => s.currentTrack);
   const isPlaying = usePlayerStore((s) => s.isPlaying);
@@ -44,19 +42,12 @@ const SearchScreen = () => {
   const { searchHistory, addSearchQuery, removeSearchQuery, clearSearchHistory } = useSearchStore();
 
   useEffect(() => {
-    Animated.timing(fadeAnim, {
-      toValue: 1,
-      duration: 300,
-      useNativeDriver: true,
-    }).start();
-
-    // Auto-focus input and show keyboard
     const timeout = setTimeout(() => {
       searchInputRef.current?.focus();
     }, 100);
 
     return () => clearTimeout(timeout);
-  }, [fadeAnim]);
+  }, []);
 
   // Debounce search query
   useEffect(() => {
@@ -118,7 +109,7 @@ const SearchScreen = () => {
   const showHistory = !debouncedQuery && searchHistory.length > 0;
 
   return (
-    <Animated.View style={[styles.container, { opacity: fadeAnim }]}>
+    <View style={styles.container}>
       <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
         {/* Header */}
         <View style={styles.header}>
@@ -297,7 +288,7 @@ const SearchScreen = () => {
 
       {/* Bottom Nav Bar */}
       <BottomNavBar />
-    </Animated.View>
+    </View>
   );
 };
 

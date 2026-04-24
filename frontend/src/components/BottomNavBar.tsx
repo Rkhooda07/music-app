@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   Animated,
   StyleSheet,
@@ -7,95 +7,111 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Home, Search, Library, Settings } from 'lucide-react-native';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 
+type NavRoute = keyof RootStackParamList;
+
 interface NavItem {
   label: string;
-  icon: React.ReactNode;
+  icon: (color: string) => React.ReactNode;
+  route?: NavRoute;
   onPress: () => void;
-  isActive?: boolean;
 }
 
 export const BottomNavBar = () => {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const route = useRoute<RouteProp<RootStackParamList, NavRoute>>();
   const insets = useSafeAreaInsets();
-  const translateY = useRef(new Animated.Value(100)).current;
-  const opacity = useRef(new Animated.Value(0)).current;
+  const indicatorX = useRef(new Animated.Value(0)).current;
+  const [navWidth, setNavWidth] = useState(0);
 
-  useEffect(() => {
-    Animated.parallel([
-      Animated.timing(translateY, {
-        toValue: 0,
-        duration: 400,
-        useNativeDriver: true,
-      }),
-      Animated.timing(opacity, {
-        toValue: 1,
-        duration: 350,
-        useNativeDriver: true,
-      }),
-    ]).start();
-  }, [translateY, opacity]);
+  const activeRoute = route.name as NavRoute;
 
   const navItems: NavItem[] = [
     {
       label: 'Home',
-      icon: <Home size={24} color="#8f826d" strokeWidth={2} />,
+      route: 'Home',
+      icon: (color: string) => <Home size={24} strokeWidth={2} color={color} />,
       onPress: () => navigation.navigate('Home'),
-      isActive: true,
     },
     {
       label: 'Search',
-      icon: <Search size={24} color="#b7a89a" strokeWidth={2} />,
+      route: 'Search',
+      icon: (color: string) => <Search size={24} strokeWidth={2} color={color} />,
       onPress: () => navigation.navigate('Search'),
     },
     {
       label: 'Library',
-      icon: <Library size={24} color="#b7a89a" strokeWidth={2} />,
-      onPress: () => {},
+      route: 'Library',
+      icon: (color: string) => <Library size={24} strokeWidth={2} color={color} />,
+      onPress: () => navigation.navigate('Library'),
     },
     {
       label: 'Settings',
-      icon: <Settings size={24} color="#b7a89a" strokeWidth={2} />,
+      icon: (color: string) => <Settings size={24} strokeWidth={2} color={color} />,
       onPress: () => {},
     },
   ];
 
+  useEffect(() => {
+    if (!navWidth) {
+      return;
+    }
+
+    const items = navItems.length;
+    const itemWidth = navWidth / items;
+    const activeIndex = navItems.findIndex((item) => item.route === activeRoute);
+    const targetX = activeIndex >= 0 ? itemWidth * activeIndex + itemWidth / 2 - 3 : 0;
+
+    Animated.spring(indicatorX, {
+      toValue: targetX,
+      useNativeDriver: true,
+      speed: 20,
+      bounciness: 8,
+    }).start();
+  }, [activeRoute, indicatorX, navWidth, navItems]);
+
   return (
-    <Animated.View
+    <View
       style={[
         styles.wrapper,
         {
           paddingBottom: Math.max(insets.bottom, 8),
-          opacity,
-          transform: [{ translateY }],
         },
       ]}
     >
       <View style={styles.shadowLayer} />
       <View style={styles.navContainer}>
-        <View style={styles.navContent}>
-          {navItems.map((item, index) => (
-            <TouchableOpacity
-              key={index}
-              activeOpacity={0.75}
-              style={[
-                styles.navItem,
-                item.isActive && styles.navItemActive,
-              ]}
-              onPress={item.onPress}
-            >
-              <View style={styles.iconContainer}>
-                {item.isActive && <View style={styles.activeIndicator} />}
-                {item.icon}
-              </View>
-            </TouchableOpacity>
-          ))}
+        <View
+          style={styles.navContent}
+          onLayout={(event) => setNavWidth(event.nativeEvent.layout.width)}
+        >
+          <Animated.View
+            style={[
+              styles.animatedIndicator,
+              { transform: [{ translateX: indicatorX }] },
+            ]}
+          />
+          {navItems.map((item, index) => {
+            const isActive = item.route === activeRoute;
+            return (
+              <TouchableOpacity
+                key={index}
+                activeOpacity={0.75}
+                style={styles.navItem}
+                onPress={item.onPress}
+              >
+                <View style={styles.iconContainer}>
+                  {item.icon(isActive ? '#8f826d' : '#b7a89a')}
+                </View>
+              </TouchableOpacity>
+            );
+          })}
         </View>
       </View>
-    </Animated.View>
+    </View>
   );
 };
 
@@ -129,31 +145,27 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
   },
   navContent: {
+    position: 'relative',
     flexDirection: 'row',
-    justifyContent: 'space-around',
     alignItems: 'center',
     height: 64,
   },
   navItem: {
+    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 8,
     paddingVertical: 8,
   },
-  navItemActive: {
-    // Styling for active state if needed
-  },
-  iconContainer: {
-    position: 'relative',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  activeIndicator: {
+  animatedIndicator: {
     position: 'absolute',
-    bottom: -8,
+    bottom: 14,
     width: 6,
     height: 6,
     borderRadius: 3,
-    backgroundColor: '#8f826d',
+    backgroundColor: '#a18f7d',
+  },
+  iconContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });
