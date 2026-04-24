@@ -4,7 +4,7 @@ import { pipeline } from 'stream/promises';
 import { MusicSearchResult } from '../services/musicTypes';
 import { resolveStreamDescriptor, warmTopSearchResults } from '../services/streamService';
 import { YouTubeDataApiError, searchYouTubeWithDataApi } from '../services/youtubeDataApiService';
-import { listFormats as listYtDlpFormats, searchYouTube } from '../services/ytDlpService';
+import { getAudioStreamDescriptor, listFormats as listYtDlpFormats, searchYouTube } from '../services/ytDlpService';
 import logger from '../utils/logger';
 
 interface SearchCacheEntry {
@@ -79,7 +79,11 @@ export const getStreamUrl = async (req: Request, res: Response, next: NextFuncti
       return res.status(400).json({ error: 'Video ID is required' });
     }
 
-    const streamDescriptor = await resolveStreamDescriptor(videoId, 'play');
+    const quality = req.query.quality === 'low' ? 'low' : 'best';
+    const streamDescriptor = quality === 'low'
+      ? await getAudioStreamDescriptor(videoId, 'low')
+      : await resolveStreamDescriptor(videoId, 'play');
+
     res.json({ url: streamDescriptor.url });
   } catch (error) {
     next(error);
@@ -93,7 +97,10 @@ export const streamAudio = async (req: Request, res: Response, next: NextFunctio
       return res.status(400).json({ error: 'Video ID is required' });
     }
 
-    const streamDescriptor = await resolveStreamDescriptor(videoId, 'play');
+    const quality = req.query.quality === 'low' ? 'low' : 'best';
+    const streamDescriptor = quality === 'low'
+      ? await getAudioStreamDescriptor(videoId, 'low')
+      : await resolveStreamDescriptor(videoId, 'play');
     const abortController = new AbortController();
     const forwardedHeaders: Record<string, string> = {
       ...streamDescriptor.httpHeaders,

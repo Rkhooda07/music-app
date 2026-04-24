@@ -166,3 +166,29 @@ export const searchYouTubeWithDataApi = async (query: string): Promise<MusicSear
     .filter((item): item is MusicSearchResult => Boolean(item))
     .sort((a, b) => (b.viewCount || 0) - (a.viewCount || 0));
 };
+export const getTrendingVideoIds = async (maxResults = 20): Promise<string[]> => {
+  const apiKey = getApiKey();
+  const searchParams = new URLSearchParams({
+    part: 'id',
+    chart: 'mostPopular',
+    regionCode: 'US',
+    maxResults: String(maxResults),
+    key: apiKey,
+  });
+
+  const response = await fetch(`${YOUTUBE_VIDEOS_ENDPOINT}?${searchParams.toString()}`);
+  const payload = await response.json() as VideosApiResponse & SearchApiResponse;
+
+  if (!response.ok) {
+    const reason = payload.error?.errors?.[0]?.reason;
+    const message = payload.error?.errors?.[0]?.message || payload.error?.message || 'YouTube Data API trending lookup failed';
+    throw new YouTubeDataApiError(
+      message,
+      response.status === 400 || response.status === 401 || response.status === 403 || FALLBACK_ERROR_REASONS.has(reason || ''),
+    );
+  }
+
+  return (payload.items || [])
+    .map((item) => item.id)
+    .filter((id): id is string => Boolean(id));
+};

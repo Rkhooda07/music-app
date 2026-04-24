@@ -207,14 +207,22 @@ export const searchMusic = async (query: string, signal?: AbortSignal): Promise<
 /**
  * Get stream URL for a video
  */
-export const getStreamUrl = async (videoId: string): Promise<string> => {
+export const getStreamUrl = async (
+  videoId: string,
+  quality: 'best' | 'low' = 'best',
+): Promise<string> => {
   if (!videoId || videoId.trim().length === 0) {
     throw new Error('Video ID cannot be empty');
   }
 
   try {
-    console.log(`[API] Getting stream URL for: ${videoId}`);
-    const url = `${API_BASE_URL}/url/${videoId}`;
+    console.log(`[API] Getting stream URL for: ${videoId} (${quality})`);
+    const params = new URLSearchParams();
+    if (quality === 'low') {
+      params.set('quality', 'low');
+    }
+
+    const url = `${API_BASE_URL}/url/${videoId}${params.toString() ? `?${params.toString()}` : ''}`;
     const response = await fetchWithRetry(url);
     const payload = await handleResponse<{ url: string }>(response);
     console.log('[API] Stream URL obtained');

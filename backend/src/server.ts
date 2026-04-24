@@ -4,6 +4,7 @@ import dotenv from 'dotenv';
 import musicRoutes from './routes/musicRoutes';
 import { errorHandler } from './middleware/errorHandler';
 import { refreshSoonExpiringStreamCache } from './services/streamService';
+import backgroundUrlFetcher from './services/backgroundUrlFetcher';
 import logger from './utils/logger';
 
 dotenv.config();
@@ -39,6 +40,15 @@ app.listen(Number(PORT), HOST, () => {
       } catch (error) {
         logger.warn(`Background sync failed: ${error instanceof Error ? error.message : 'unknown error'}`);
       }
+    }, intervalMs);
+  }
+
+  if (process.env.ENABLE_BACKGROUND_URL_FETCHER === 'true') {
+    const intervalMs = Number(process.env.BACKGROUND_URL_FETCH_INTERVAL_MS) || 5 * 60 * 1000;
+    logger.info(`Background URL fetcher enabled: warming stream cache every ${intervalMs}ms`);
+    void backgroundUrlFetcher.start();
+    setInterval(() => {
+      void backgroundUrlFetcher.start();
     }, intervalMs);
   }
 });

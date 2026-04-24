@@ -16,7 +16,7 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useQuery } from '@tanstack/react-query';
 import { ChevronLeft, Search, X, Trash2, Clock } from 'lucide-react-native';
 import { RootStackParamList } from '../navigation/types';
-import { searchMusic } from '../api/music';
+import { getStreamUrl, searchMusic } from '../api/music';
 import { useSearchStore } from '../store/search.store';
 import { usePlayerStore } from '../store/player.store';
 import { MusicTrack } from '../types/music';
@@ -35,6 +35,11 @@ const SearchScreen = () => {
   const isPlaying = usePlayerStore((s) => s.isPlaying);
   const loadingTrackId = usePlayerStore((s) => s.loadingTrackId);
   const clearPlayerError = usePlayerStore((s) => s.clearError);
+  const [prefetchedTrackIds, setPrefetchedTrackIds] = useState<Set<string>>(new Set());
+
+  const markPrefetched = (trackId: string) => {
+    setPrefetchedTrackIds((prev) => new Set(prev).add(trackId));
+  };
 
   const { searchHistory, addSearchQuery, removeSearchQuery, clearSearchHistory } = useSearchStore();
 
@@ -78,6 +83,21 @@ const SearchScreen = () => {
   const handleTrackPress = async (track: MusicTrack) => {
     clearPlayerError();
     addSearchQuery(debouncedQuery);
+
+    if (!prefetchedTrackIds.has(track.id)) {
+      void getStreamUrl(track.id).catch(() => undefined);
+      markPrefetched(track.id);
+    }
+
+    const currentIndex = topTracks.findIndex((item) => item.id === track.id);
+    const nextResults = topTracks.slice(currentIndex + 1, currentIndex + 3);
+    nextResults.forEach((result) => {
+      if (!prefetchedTrackIds.has(result.id)) {
+        void getStreamUrl(result.id).catch(() => undefined);
+        markPrefetched(result.id);
+      }
+    });
+
     await playTrack(track, topTracks);
   };
 

@@ -74,7 +74,8 @@ const unloadPrefetchedSound = async (sound: Audio.Sound | null) => {
   }
 };
 
-const buildStreamUri = (trackId: string) => `${API_BASE_URL}/stream/${trackId}`;
+const buildStreamUri = (trackId: string, quality: 'best' | 'low' = 'best') =>
+  `${API_BASE_URL}/stream/${trackId}${quality === 'low' ? '?quality=low' : ''}`;
 
 const resolveCurrentTrackIndex = (
   queue: MusicTrack[],
@@ -213,7 +214,9 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
       }
 
       const preloadedSound = state.prefetchedTrackId === track.id ? state.prefetchedSound : null;
-      const streamUrl = buildStreamUri(track.id);
+      const streamUrl = preloadedSound
+        ? buildStreamUri(track.id, 'best')
+        : buildStreamUri(track.id, 'low');
 
       if (playbackRequest !== latestPlaybackRequest) {
         return;
@@ -272,6 +275,10 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
           void get().skipNext();
         }
       });
+
+      if (!preloadedSound) {
+        void getStreamUrl(track.id, 'best').catch(() => undefined);
+      }
 
       if (preloadedSound) {
         await sound.playAsync();
