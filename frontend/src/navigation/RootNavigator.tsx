@@ -4,6 +4,7 @@ import {
   GreetingScreen,
   HomeScreen,
   LibraryScreen,
+  PlaylistDetailScreen,
   PlayerScreen,
   SearchScreen,
 } from '../screens';
@@ -24,6 +25,7 @@ export const RootNavigator = () => {
       <Stack.Screen name="Home" component={HomeScreen} />
       <Stack.Screen name="Search" component={SearchScreen} />
       <Stack.Screen name="Library" component={LibraryScreen} />
+      <Stack.Screen name="PlaylistDetail" component={PlaylistDetailScreen} />
       <Stack.Screen
         name="Player"
         component={PlayerScreen}

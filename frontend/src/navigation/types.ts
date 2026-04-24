@@ -3,5 +3,6 @@ export type RootStackParamList = {
   Home: undefined;
   Search: undefined;
   Library: undefined;
+  PlaylistDetail: { playlistId: string };
   Player: undefined;
 };
