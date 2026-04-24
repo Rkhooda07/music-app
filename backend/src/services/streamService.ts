@@ -1,6 +1,7 @@
 import logger from '../utils/logger';
 import { MusicSearchResult, StreamDescriptor } from './musicTypes';
 import { getAudioStreamDescriptor } from './ytDlpService';
+import { getCachedStreamDescriptor, setCachedStreamDescriptor, isRedisEnabled } from './cacheService';
 
 type StreamPriority = 'play' | 'warm';
 
@@ -26,9 +27,38 @@ const isFreshDescriptor = (entry?: Partial<StreamDescriptor>): entry is StreamDe
   return Boolean(entry?.url && entry?.expiresAt && entry.expiresAt - STREAM_EXPIRY_SKEW_MS > Date.now());
 };
 
+const STREAM_DESCRIPTOR_TTL_SECONDS = 3600;
+const REFRESH_WINDOW_MS = 60 * 60 * 1000;
+
 const storeResolvedDescriptor = (videoId: string, descriptor: StreamDescriptor) => {
   streamCache.set(videoId, descriptor);
   return descriptor;
+};
+
+const retrieveDescriptorFromRedis = async (videoId: string): Promise<StreamDescriptor | null> => {
+  if (!isRedisEnabled) {
+    return null;
+  }
+
+  try {
+    const cached = await getCachedStreamDescriptor(videoId);
+    return cached && isFreshDescriptor(cached) ? cached : null;
+  } catch (error) {
+    logger.warn(`Redis read failed for ${videoId}: ${error instanceof Error ? error.message : 'unknown error'}`);
+    return null;
+  }
+};
+
+const cacheDescriptorToRedis = async (videoId: string, descriptor: StreamDescriptor) => {
+  if (!isRedisEnabled) {
+    return;
+  }
+
+  try {
+    await setCachedStreamDescriptor(videoId, descriptor, STREAM_DESCRIPTOR_TTL_SECONDS);
+  } catch (error) {
+    logger.warn(`Redis write failed for ${videoId}: ${error instanceof Error ? error.message : 'unknown error'}`);
+  }
 };
 
 const runNextQueuedExtraction = () => {
@@ -43,19 +73,27 @@ const runNextQueuedExtraction = () => {
 
   activeExtractions += 1;
 
-  getAudioStreamDescriptor(nextJob.videoId)
-    .then((descriptor) => {
+  (async () => {
+    try {
+      const redisDescriptor = await retrieveDescriptorFromRedis(nextJob.videoId);
+      if (redisDescriptor) {
+        storeResolvedDescriptor(nextJob.videoId, redisDescriptor);
+        nextJob.resolve(redisDescriptor);
+        return;
+      }
+
+      const descriptor = await getAudioStreamDescriptor(nextJob.videoId);
+      await cacheDescriptorToRedis(nextJob.videoId, descriptor);
       storeResolvedDescriptor(nextJob.videoId, descriptor);
       nextJob.resolve(descriptor);
-    })
-    .catch((error) => {
+    } catch (error) {
       streamCache.delete(nextJob.videoId);
       nextJob.reject(error);
-    })
-    .finally(() => {
+    } finally {
       activeExtractions -= 1;
       runNextQueuedExtraction();
-    });
+    }
+  })();
 };
 
 export const resolveStreamDescriptor = async (
@@ -89,6 +127,20 @@ export const resolveStreamDescriptor = async (
   } catch (error) {
     throw error;
   }
+};
+
+export const resolveMultipleStreamDescriptors = async (videoIds: string[]): Promise<StreamDescriptor[]> => {
+  const uniqueIds = Array.from(new Set(videoIds.filter(Boolean)));
+  return Promise.all(uniqueIds.map((videoId) => resolveStreamDescriptor(videoId, 'warm')));
+};
+
+export const refreshSoonExpiringStreamCache = async (): Promise<void> => {
+  const now = Date.now();
+  const retryJobs = Array.from(streamCache.entries())
+    .filter(([, entry]) => isFreshDescriptor(entry) && entry.expiresAt - now < REFRESH_WINDOW_MS)
+    .map(([videoId]) => resolveStreamDescriptor(videoId, 'warm'));
+
+  await Promise.allSettled(retryJobs);
 };
 
 export const warmTopSearchResults = (tracks: MusicSearchResult[], limit = 3) => {

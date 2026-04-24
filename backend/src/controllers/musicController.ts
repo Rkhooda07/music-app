@@ -146,15 +146,38 @@ export const streamAudio = async (req: Request, res: Response, next: NextFunctio
       }
 
       const bodyStream = Readable.fromWeb(upstreamResponse.body as any);
-      await pipeline(bodyStream, res);
+      try {
+        await pipeline(bodyStream, res);
+      } catch (pipelineError) {
+        if (
+          pipelineError instanceof Error &&
+          (pipelineError.name === 'AbortError' || pipelineError.message.includes('Premature close'))
+        ) {
+          return;
+        }
+
+        if (res.headersSent || req.aborted || res.writableEnded) {
+          return;
+        }
+
+        throw pipelineError;
+      }
     } finally {
       req.off('close', closeHandler);
     }
 
   } catch (error) {
-    if (error instanceof Error && error.name === 'AbortError') {
+    if (
+      error instanceof Error &&
+      (error.name === 'AbortError' || error.message.includes('Premature close'))
+    ) {
       return;
     }
+
+    if (res.headersSent || req.aborted || res.writableEnded) {
+      return;
+    }
+
     next(error);
   }
 };

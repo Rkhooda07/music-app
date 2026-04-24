@@ -26,11 +26,9 @@ export const RootNavigator = () => {
         options={{
           presentation: 'transparentModal',
           animation: 'none',
-          animationEnabled: false,
           contentStyle: {
             backgroundColor: 'transparent',
           },
-          cardOverlayEnabled: false,
         }}
       />
     </Stack.Navigator>

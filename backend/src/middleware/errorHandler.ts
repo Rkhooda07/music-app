@@ -3,6 +3,10 @@ import logger from '../utils/logger';
 
 export const errorHandler = (err: any, req: Request, res: Response, next: NextFunction) => {
   logger.error(`${err.name}: ${err.message}`, { stack: err.stack });
+
+  if (res.headersSent) {
+    return next(err);
+  }
   
   const statusCode = err.statusCode || 500;
   const message = err.message || 'Internal Server Error';

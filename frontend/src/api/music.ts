@@ -3,7 +3,7 @@ import Constants from 'expo-constants';
 import { MusicTrack } from '../types/music';
 
 const API_PATH = '/api/music';
-const REQUEST_TIMEOUT = 8000; // 8 seconds
+const REQUEST_TIMEOUT = 15000; // 15 seconds
 const MAX_RETRIES = 2;
 
 /**
